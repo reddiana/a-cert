@@ -8,3 +8,4 @@
 .trash
 .obsidian/workspace.json
 .obsidian/bookmarks.json
+.obsidian/**/data.json
