@@ -9,7 +9,7 @@
   "showUnsupportedFiles": true,
   "newFileFolderPath": "/",
   "propertiesInDocument": "visible",
-  "newLinkFormat": "absolute",
+  "newLinkFormat": "shortest",
   "userIgnoreFilters": null,
   "defaultViewMode": "source",
   "tabSize": 2

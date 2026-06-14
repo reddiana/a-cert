@@ -5,16 +5,15 @@
   "typing-transformer-obsidian",
   "dataview",
   "number-headings-obsidian",
-  "obsidian-footnotes",
   "obsidian-style-settings",
   "remotely-save",
-  "longform",
-  "automatic-table-of-contents",
   "obsidian-git",
   "templater-obsidian",
   "calendar",
   "drawio-obsidian",
-  "obsidian-excalidraw-plugin",
+  "refresh-preview",
   "obsidian-plantuml",
-  "refresh-preview"
+  "advanced-merger",
+  "obsidian-enhancing-export",
+  "obsidian-linter"
 ]
