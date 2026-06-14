@@ -1,0 +1,37 @@
+{
+  "collapse-filter": false,
+  "search": "-tag:journal  -path:template  -tag:#Jounral -path:Excalidraw  ",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "[hub:true]",
+      "color": {
+        "a": 1,
+        "rgb": 16711680
+      }
+    },
+    {
+      "query": "[\"todopage\":true]",
+      "color": {
+        "a": 1,
+        "rgb": 16711680
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": -3,
+  "nodeSizeMultiplier": 1.07345454545455,
+  "lineSizeMultiplier": 1.32945454545455,
+  "collapse-forces": false,
+  "centerStrength": 0.906345083487941,
+  "repelStrength": 20,
+  "linkStrength": 1,
+  "linkDistance": 30,
+  "scale": 1.0636320539201782,
+  "close": true
+}

@@ -1,0 +1,86 @@
+{
+  "userAdmonitions": {
+    "wrtn": {
+      "type": "wrtn",
+      "color": "#7d7d7d",
+      "icon": {
+        "name": "quote-right",
+        "type": "font-awesome"
+      },
+      "command": false,
+      "title": "Wrtn",
+      "injectColor": false,
+      "noTitle": false
+    },
+    "bing": {
+      "type": "bing",
+      "color": "#7d7d7d",
+      "icon": {
+        "name": "quote-right",
+        "type": "font-awesome"
+      },
+      "command": false,
+      "title": "Bing",
+      "injectColor": false,
+      "noTitle": false
+    },
+    "gpt": {
+      "type": "gpt",
+      "color": "#7d7d7d",
+      "icon": {
+        "name": "quote-right",
+        "type": "font-awesome"
+      },
+      "command": false,
+      "title": "CahtGPT",
+      "injectColor": false,
+      "noTitle": false
+    },
+    "namu": {
+      "type": "namu",
+      "color": "19, 195, 22",
+      "icon": {
+        "name": "quote-left",
+        "type": "font-awesome"
+      },
+      "command": false,
+      "title": "나무위키",
+      "injectColor": true,
+      "noTitle": false
+    },
+    "llm": {
+      "type": "llm",
+      "color": "#7d7d7d",
+      "icon": {
+        "name": "graduation-cap",
+        "type": "font-awesome"
+      },
+      "command": false,
+      "title": "llm",
+      "iconWithCss": false,
+      "injectColor": true,
+      "noTitle": false
+    }
+  },
+  "syntaxHighlight": false,
+  "copyButton": true,
+  "version": "11.0.3",
+  "autoCollapse": false,
+  "defaultCollapseType": "open",
+  "injectColor": true,
+  "parseTitles": true,
+  "dropShadow": true,
+  "hideEmpty": false,
+  "icons": [],
+  "useFontAwesome": true,
+  "rpgDownloadedOnce": false,
+  "msDocConverted": false,
+  "useSnippet": false,
+  "snippetPath": "custom-admonitions.36e447",
+  "open": {
+    "admonitions": true,
+    "icons": true,
+    "other": true,
+    "advanced": false
+  }
+}

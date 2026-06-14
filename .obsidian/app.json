@@ -1,0 +1,16 @@
+{
+  "readableLineLength": false,
+  "alwaysUpdateLinks": true,
+  "vimMode": true,
+  "spellcheck": false,
+  "showIndentGuide": true,
+  "attachmentFolderPath": "assets",
+  "newFileLocation": "root",
+  "showUnsupportedFiles": true,
+  "newFileFolderPath": "/",
+  "propertiesInDocument": "visible",
+  "newLinkFormat": "absolute",
+  "userIgnoreFilters": null,
+  "defaultViewMode": "source",
+  "tabSize": 2
+}
