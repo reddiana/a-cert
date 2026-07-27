@@ -1,5 +1,7 @@
+#1. Project Overview
 
 
+## 1.1 Project Charter
 
 ### 배경  
 
@@ -39,6 +41,8 @@ SDS가 수행하는 대내외 프로젝트에 무상으로 제공되는 Batch Jo
 
 
 
+## 1.2 Stakeholder
+
 | Stakeholder               | Description                                   | 주요 관심 및 Pain Point                                                                                                                                                                                                                                                    |
 | ------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | BatchService 개발자          | BatchService의 핵심 스케줄러 기능 및 분산 라이브러리 교체 개발 담당자 | - 외부 라이브러리 없이 순수 Java만으로 동시성 제어 및 클러스터링을 결함(Race Condition, Deadlock) 없이 구현해야 함.<br>- 코드가 과도하게 복잡해지지 않고 유지보수 용이성을 유지해야 함.<br>- 핵심 분산 기능(Lock, Queue)을 인터페이스 기반으로 정밀 추상화하여 구현체 간 결합도를 낮추고 유지보수 확장성을 보장해야 함.                                                            |
@@ -46,6 +50,8 @@ SDS가 수행하는 대내외 프로젝트에 무상으로 제공되는 Batch Jo
 | 사내 재사용자산 관리자              | 사내 공통 자산의 라이선스, 비용 리스크 및 지식재산권을 관리하는 담당자      | - Hazelcast 유료화에 따른 라이선스 비용 리스크를 제거해야 함.<br>- 독자적 기술 내재화를 통한 사내 기술 자산 가치 증대 및 타 프로젝트 전파를 위한 체계적인 아키텍처 문서와 검증 데이터가 필요함.                                                                                                                                                |
 
 
+
+## 1.3 Business Goal
 
 프로젝트 아키텍처 개편을 통해 달성하고자 하는 궁극적인 비즈니스 목표를 정의합니다.
 
@@ -56,6 +62,8 @@ SDS가 수행하는 대내외 프로젝트에 무상으로 제공되는 Batch Jo
 |      BG-03       | 재사용 자산 배포 용이성 극대화 | 타 프로젝트에 BatchService를 도입할 때 추가 인프라 제약이나 외부 의존성 설치 허들을 최소화. |      NR-04       |
 
 
+
+## 1.4 Issue and Requirement Analysis
 
 프로젝트 아키텍처 수립의 기반이 되는 핵심 비즈니스 이슈와 이를 해결하기 위한 요구사항을 정의합니다.
 
@@ -96,6 +104,8 @@ Hazelcast 의존성을 배제하고, 기존의 분산 클러스터링 및 동시
 
 
 
+## 1.5 Business context Diagram
+
 BatchService의 비즈니스 영역 경계와 외부 행위자/시스템 간의 관계를 다이어그램으로 나타냅니다.
 ![[Pasted image 20260615001919.png]]
 ```mermaid
@@ -135,8 +145,10 @@ graph TD
 
 
 
+#2. System Overview
 
 
+## 2.1 System Context Diagram
 
 BatchService를 중심으로 상호작용하는 외부 시스템 및 운영자와의 관계를 시스템 관점에서 정의합니다.
 ![[Pasted image 20260615002015.png]]
@@ -172,6 +184,8 @@ graph LR
 
 
 
+## 2.2 External Entity List
+
 BatchService와 연계되는 외부 시스템, 행위자(Actor) 및 관련 자원의 역할을 정의합니다.
 
 |  ID   | 외부 엔티티명               |   구분   | 설명                                                                    |
@@ -183,6 +197,8 @@ BatchService와 연계되는 외부 시스템, 행위자(Actor) 및 관련 자�
 
 
 
+## 2.3 External Interface List
+
 BatchService가 외부 엔티티와 데이터를 주고받을 때 사용하는 통신 규격 및 인터페이스 사양을 정리합니다.
 
 |   ID   | 인터페이스명           | 송신/수신 | 프로토콜/연계방식               | 연계 데이터 및 설명                                                                  |
@@ -193,6 +209,8 @@ BatchService가 외부 엔티티와 데이터를 주고받을 때 사용하는 �
 | INF-04 | 데이터베이스 연계 인터페이스  | 송/수신  | JDBC (TCP)              | 스케줄 구성 데이터 조회, 배치 실행 이력 적재 및 클러스터 하트비트/저널링 데이터 영속화 수행.                       |
 
 
+
+## 2.4 System Feature List
 
 Hazelcast 의존성을 배제하고, 기존의 분산 클러스터링 및 동시성 제어 기능과 운영 안정성을 대체하여 구현할 시스템 기능(System Feature)의 상세 정의와 구현 범위를 기술합니다.
 
@@ -206,6 +224,8 @@ Hazelcast 의존성을 배제하고, 기존의 분산 클러스터링 및 동시
 
 
 
+## 2.5 Assumption of the System
+
 BatchService 아키텍처 설계 및 구현의 전제가 되는 환경적/비즈니스적 가정 사항(Assumption)을 정의합니다.
 
 |   ID   | 가정 사항            | 상세 설명                                                                                                                          | 비고                     |
@@ -217,8 +237,10 @@ BatchService 아키텍처 설계 및 구현의 전제가 되는 환경적/비즈
 
 
 
+#3. Architectural Driver
 
 
+## 3.1 Use Case Model
 
 BatchService 핵심 클러스터링 엔진 교체와 관련하여 시스템이 처리해야 하는 주요 동작 시나리오를 정의합니다.
 
@@ -345,6 +367,8 @@ graph LR
 | 사후 조건      | 강제 조작 수행 결과가 공유 저널 정보에 기록되며 즉시 반영됨.                                                                                                                                                                          |
 
 
+
+## 3.2 Quality Attribute Scenario
 
 본 프로젝트 아키텍처 개편을 결정하는 핵심 품질 속성 시나리오(Availability, Consistency, Reliability 등)를 정의함.
 
@@ -484,6 +508,8 @@ graph LR
 
 
 
+## 3.3 Constraint
+
 BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 하는 기술적, 운영적 제약 조건(Constraints)을 정의합니다.
 
 |  ID   | 제약 사항                         | 상세 내용                                                                                                                                                                                                                     |
@@ -493,6 +519,8 @@ BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 
 
 
 
+
+## 3.4 Quality Attribute Priority Evaluation
 
 도출된 품질 속성(QA) 시나리오에 대해 각 이해관계자(Stakeholder)별 우선순위 투표 결과 및 시나리오별 중요도/난이도를 반영하여 가중합 점수 기반의 최종 우선순위를 평가합니다.
 
@@ -544,10 +572,10 @@ BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 
   * 패키지 기동 명령 후 10분 이내에 무중단 클러스터 동적 참여를 완료하는 시나리오입니다.
 
 
+#4. Top Level Design
 
 
-
-
+##4.1 Architecture Design Strategy
 
 
 ### 4.1.0 Architecture Design Decision
@@ -559,8 +587,7 @@ BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 
 > 2. **다관점 설계**: 멘토 피드백에 따라, 개발(구현) 관점에 편중되지 않고 인프라 구조, 배포 토폴로지, 보안 컴플라이언스, 데이터 전략 등 아키텍처 전반을 조망하는 구조적 관점을 포함합니다.
 > 3. **추적성(Traceability)**: 각 DD는 관련 System Requirement(FR/NR), System Feature(SF), Quality Attribute Scenario(QAS), Constraint(CR), Business Goal(BG), Assumption(ASM)과 명시적으로 연결되어 요구사항 → 설계 전략 간 논리적 일관성을 확보합니다.
 
-#### 4.1.0.1 Design Decision 목록
-
+**4.1.0.1 Design Decision 목록**
 | ID    | 주제                           | Decision이 필요한 사유                                                                                                       | 관련 Requirement / Feature / QAS / 제약                       |
 | ----- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | DD-01 | 리더 선출 및 멤버십 관리 방안            | 노드 장애 감지 및 클러스터 고가용성(자가 치유)을 실현하는 리더 선출 알고리즘 및 멤버십 동기화 메커니즘을 결정해야 함.                                                   | SF-01, SF-05, FR-04, NR-08, QAS-03, QAS-04, QAS-05        |
@@ -572,8 +599,7 @@ BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 
 | DD-07 | K8s 복제본(Replica) 관리 컨트롤러 결정  | Kubernetes 환경에서 다중 스케줄러 인스턴스의 안정적 수명 주기 제어, 고유 식별 가시성 확보, 및 순차적 롤링 업데이트를 보장하는 컨트롤러 유형을 결정함.                            | CR-02, ASM-01, SF-01, SF-05, NR-09, QAS-04, QAS-05        |
 | DD-08 | 클러스터 노드 자원(메모리/CPU) 경량화 전략   | Hazelcast 대비 JVM Heap 메모리 및 CPU 오버헤드를 50% 이상 절감하여, 저사양 인프라에서의 안정적 가동을 보장하는 엔진 경량화 방안을 결정함.                             | NR-05, QAS-07                                             |
 | DD-09 | 기존 API 및 메타 스키마 하위 호환성 보장 전략 | 기존 배치 애플리케이션 및 타 시스템이 수정 없이 작동할 수 있도록, 엔진 교체 시 사용자 인터페이스(API) 및 메타 DB 스키마의 하위 호환성을 유지하는 전략을 결정함.                       | CR-02, NR-03, NR-09, BG-03                                |
-#### 4.1.0.2 QAS ↔ DD 매핑 추적 매트릭스 (Traceability Matrix)
-
+**4.1.0.2 QAS ↔ DD 매핑 추적 매트릭스 (Traceability Matrix)**
 모든 품질 속성 시나리오(QAS)가 최소 하나 이상의 Design Decision에 의해 대응됨을 검증합니다.
 
 | QAS ID | 품질 속성 시나리오명                                     | 대응 DD                |
@@ -590,8 +616,10 @@ BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 
 
 
 
+###4.1.1 DD-01 Leader Election
 
 
+#### 4.1.1.1 Design Goal
 
 ### 4.1.1.1 Design Goal
 
@@ -603,34 +631,29 @@ BatchService 핵심 클러스터링 엔진에서 멤버십을 효율적으로 �
 
 
 
+####4.1.1.2 Design Approaches
 
 
+##### 4.1.1.2.1 Design Approach 1 - RDBMS Lock-based 리더 선출
 
-### 4.1.1.2.1 Design Approach 1 - RDBMS Lock-based 리더 선출
-
-#### 개요
-
+**개요**
 공통 메타 데이터베이스(RDBMS)의 전용 멤버십 테이블을 매개체로 노드 간 합의를 도출합니다. 노드들은 구동 시 자신의 활성 정보(ID, IP, Heartbeat Time)를 등록하고, 데이터베이스 트랜잭션 락(비관적 락 또는 유니크 인덱스 경쟁 UPDATE)을 활용하여 리더십을 획득합니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.1 DD-01 Leader Election/4.1.1.2 Design Approaches/Untitled Diagram.svg]]
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **추가 인프라 최소화:** Redis, Zookeeper 등의 별도 분산 코디네이터 미들웨어 도입 없이 이미 배포된 RDBMS(MariaDB 등)를 그대로 재사용하므로 배포성(`QAS-08 [이식성]`)을 향상합니다.
 - **보안 컴플라이언스 즉시 통과:** 노드 간의 별도 전용 포트 개방 없이, 이미 허용된 RDBMS 커넥션 포트(예: 3306)만을 중계 통로로 활용하므로 단일 네트워크 내부 보안 정책을 손쉽게 충족합니다.
 
-#### 장점
-
+**장점**
 - 별도 분산 인프라 구축 없는 즉시 적용성 및 이식성 우수 (`QAS-08`, `QAS-09`).
 - 단일 네트워크 포트 재활용으로 보안 지침 만족 (`QAS-06`).
 
-#### 단점
-
+**단점**
 - **주기적 DB 조회(Polling) 오버헤드:** 수 초 주기의 Polling 쿼리에 따른 지속적인 DB I/O 소모 발생.
 - **유령(Zombie) 노드 누적 및 리더 Flapping 리스크:** 노드 급작 종료 시 무효 멤버 레코드 누적 및 동시 롤링 배포 시 락 경합 파동(Flapping) 발생 위험.
 - **리더 재선출 지연에 따른 일시적 태스크 중단 리스크:** 리더 노드 크래시 후 임대 시간 만료 및 새 리더 승계까지 수 초간의 리더십 공백 발생.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **DB Polling 오버헤드 약점 → DD-05 (공유 영속 저장소) 연계 보완:**
   - 본 대안의 주기적 DB 조회(Polling) 부하는 `DD-05` Shared RDBMS Metatable 대안과의 결합을 통해 보완됩니다. 기존 DB 커넥션 풀을 그대로 재활용하고 경량화된 SQL 쿼리(3초 주기)를 사용하여 추가 인프라 구축 없이 DB 조회 오버헤드를 낮춥니다.
 - **유령(Zombie) 노드 누적 및 리더 Flapping 리스크 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
@@ -640,10 +663,9 @@ BatchService 핵심 클러스터링 엔진에서 멤버십을 효율적으로 �
 
 
 
-### 4.1.1.2.2 Design Approach 2 - Socket Gossip 기반 Leaderless 멤버십 분산 프로토콜
+##### 4.1.1.2.2 Design Approach 2 - Socket Gossip 기반 Leaderless 멤버십 분산 프로토콜
 
-#### 개요
-
+**개요**
 노드 간에 Direct TCP 소켓 통신을 기반으로 가십 프로토콜(Gossip Protocol)을 구동하여 단일 리더(Leader)를 선출하지 않고, 모든 노드가 대등한 Peer로서 클러스터 멤버십과 노드 상태 정보(Heartbeat/State)를 분산 전파 및 동기화합니다.
 
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.1 DD-01 Leader Election/4.1.1.2 Design Approaches/Untitled Diagram 5.svg]]
@@ -654,21 +676,17 @@ BatchService 핵심 클러스터링 엔진에서 멤버십을 효율적으로 �
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.1 DD-01 Leader Election/4.1.1.2 Design Approaches/Untitled Diagram 2.svg]]
 <Raft Consensus (VoteRequest & Leader Election via P2P Socket)>
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **Direct P2P Communication:** 중앙 미들웨어 없이 노드 간 Direct TCP 소켓 통신을 통해 클러스터 멤버십 및 노드 상태 정보(Heartbeat/State)를 분산 전파.
 
-#### 장점
-
+**장점**
 - **단일 장애점(SPOF) 부재 및 우수한 수평 확장성:** 중앙 조율자나 단일 리더 노드가 없어 특정 노드 장애 시에도 클러스터 전체가 마비되지 않으며, 노드 추가/삭제 시 클러스터 구성이 매우 자율적입니다.
 
-#### 단점
-
+**단점**
 - **단일 리더 부재로 인한 중복 스케줄링 리스크:** Leaderless 아키텍처 특성상 동일한 배치 작업이 복수의 노드에서 중복 기동되는 방지책을 제공하지 못하며(`QAS-03`), 최종 일관성 지연으로 인한 스플릿 브레인 정합성 유실 우려가 존재함 (DD-01 근본 목표 미충족).
 - **노드 간 전용 소켓 포트 통신 및 네트워크 관리 오버헤드:** 다중 Pod 간 Direct TCP 소켓 포트 연결을 개별적으로 개방하고 관리해야 하므로 기존 K8s 배포 매니페스트 변경 최소화 지침(`NR-09`, `CR-02`) 대비 추가적인 배포 오버헤드가 유발됨.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **리더 부재로 인한 중복 스케줄링 리스크 → DD-02 (분산 락) 연계 보완 시도 및 한계:**
   - 리더 노드를 선출하지 않는 Leaderless 특성상 동일 배치가 여러 노드에서 중복 실행되는 치명적 약점이 발생합니다. 이를 보완하기 위해 `DD-02` DB Record-based Lease 락 대안을 강제 적용하여 태스크 수준의 상호 배제를 꾀할 수 있으나, 리더 중심의 체계적 워크플로우 스케줄링이라는 DD-01 본연의 목적을 완전하게 대체하지는 못합니다.
 - **노드 간 소켓 포트 통신 오버헤드 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
@@ -676,10 +694,9 @@ BatchService 핵심 클러스터링 엔진에서 멤버십을 효율적으로 �
 
 
 
-### 4.1.1.2.3 Design Approach 3 - Socket P2P Raft  프로토콜
+##### 4.1.1.2.3 Design Approach 3 - Socket P2P Raft  프로토콜
 
-#### 개요
-
+**개요**
 노드 간에 TCP 소켓 연결을 직접 맺고 메모리 상에서 Raft 합의 알고리즘(Leader/Follower/Candidate 상태 머신 및 Term, VoteRequest, AppendEntries 과반수 투표 메커니즘)을 직접 구현하여 단일 리더(Leader)를 동적으로 선출하고 멤버십을 관리합니다.
 
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.1 DD-01 Leader Election/4.1.1.2 Design Approaches/Untitled Diagram 3.svg]]
@@ -688,21 +705,17 @@ BatchService 핵심 클러스터링 엔진에서 멤버십을 효율적으로 �
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.1 DD-01 Leader Election/4.1.1.2 Design Approaches/Untitled Diagram 4.svg]]
 <Raft Split-Brain & Recovery Scenario>
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **In-Memory Raft Consensus:** 서드파티 미들웨어 없이 TCP 소켓 통신 상에서 Raft 합의 알고리즘(Leader/Follower/Candidate 상태 머신)을 구동.
 
-#### 장점
-
+**장점**
 - **강한 일관성 및 실시간 장애 탐지:** Raft 알고리즘의 Quorum(과반수) 합의 방식을 통해 네트워크 분할 시에도 이중 리더(Split-Brain) 발생을 차단하며, TCP 커넥션 유실(RST/FIN)을 통해 밀리초(ms) 단위로 장애를 탐지하므로 반응 속도가 매우 빠릅니다.
 
-#### 단점
-
+**단점**
 - **Dynamic Pod IP 변동에 따른 Raft Quorum 이탈 리스크:** Pod 재기동 및 IP 변경 발생 시 노드 간 P2P Raft 소켓 연결 및 Quorum 동기화가 소멸할 위험이 존재함.
 - **Raft 자체 구현 난이도 및 통신 모듈 관리 오버헤드:** 서드파티 라이브러리 없이 JDK 표준 소켓만으로 Raft 상태 머신을 개발하는 결함 리스크(`NR-01`) 및 백그라운드 소켓 통신 모듈 관리 오버헤드가 발생함.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **Dynamic Pod IP 변동에 따른 Raft Quorum 이탈 약점 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
   - P2P Raft 소켓 연결 시 Pod 재기동에 따른 IP 변경으로 쿼럼 동기화가 무너질 수 있는 치명적 약점은 `DD-07` K8s StatefulSet 대안으로 보완합니다. 고정 Headless Pod DNS(`batch-0.batch-service`)를 부여하여 IP 변경 시에도 Raft 쿼럼 투표 커넥션을 즉시 복원합니다.
 - **Raft 구현 난이도 및 통신 모듈 관리 오버헤드 → DD-06 (엔진 배포 구조) 연계 보완:**
@@ -710,12 +723,12 @@ BatchService 핵심 클러스터링 엔진에서 멤버십을 효율적으로 �
 
 
 
-### 4.1.1.3 Design Decision and Rationale
+#### 4.1.1.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - RDBMS Lock 기반 리더 선출
 
-#### 선정근거
+**선정근거**
 * **기업 폐쇄망 인프라 제약과의 적합성:**
   * 기존에 이미 구성된 RDBMS 접속 정보만을 재활용하여 단일 네트워크 환경에서 추가 포트 구성 리드타임 없이 신속 도입 가능함에 부합.
 * **사내 기술 자산 라이선스 및 배포 환경 보존:**
@@ -724,7 +737,7 @@ Design Approach 1 - RDBMS Lock 기반 리더 선출
 * **스케줄러 워크로드 수준의 합의 비용:**
   * 3~5개 규모의 저사양 노드 환경에서 구동되므로 분산 합의에 필요한 리소스 비용이 극히 낮습니다. 주기적인 메타 RDBMS 갱신(Heartbeat UPDATE, 3~5초 주기) 수준의 부하는 RDBMS에서 가볍게 수용 가능한 부하 범위 내에 수렴하며 스플릿 브레인을 방지합니다 (`QAS-03 [신뢰성]`).
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목                                                 |           Design Approach 1: RDBMS Lock 기반 (Selected)            |                 Design Approach 2: Socket Gossip Leaderless                 |                       Design Approach 3: Socket P2P Raft                        |
 |:--------------------------------------------------------- |:------------------------------------------------------------------:|:---------------------------------------------------------------------------:|:-------------------------------------------------------------------------------:|
 | 외부 라이브러리 최소화 (`NR-01`)                          |    **【우수】**<br>JDK 표준 및 JDBC만 사용하여 외부 의존성 없음    |            **【우수】**<br>소켓 전파 구현은 용이하나 리더 미선출            | **【부적합】**<br>자체 구현 시 Raft 상태 머신/Split-Brain 조율 결함 리스크 높음 |
@@ -733,8 +746,10 @@ Design Approach 1 - RDBMS Lock 기반 리더 선출
 
 
 
+###4.1.2 DD-02 Distributed Lock
 
 
+#### 4.1.2.1 Design Goal
 
 ### 4.1.2.1 Design Goal
 
@@ -747,32 +762,27 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
 
 
 
+####4.1.2.2 Design Approaches
 
 
+##### 4.1.2.2.1 Design Approach 1 - RDBMS SELECT FOR UPDATE 비관적 락
 
-### 4.1.2.2.1 Design Approach 1 - RDBMS SELECT FOR UPDATE 비관적 락
-
-#### 개요
-
+**개요**
 데이터베이스의 물리 세션 커넥션을 유지한 채 특정 배치 키에 해당하는 Row를 `SELECT ... FOR UPDATE` 구문으로 조회하여, 데이터베이스 트랜잭션 락 세션이 점유 중일 때 타 노드의 접근을 차단합니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.2 DD-02 Distributed Lock/4.1.2.2 Design Approaches/Untitled Diagram.svg]]
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **Session-bound Row Locking:** DB 물리 세션 커넥션을 유지한 채 `SELECT ... FOR UPDATE`로 행 락을 점유하는 방식.
 
-#### 장점
-
+**장점**
 - **가장 신뢰할 수 있는 상호 배제:** 데이터베이스 자체의 락 메커니즘을 활용하므로 동시성 트래픽이 몰려도 상호 배제가 작동하여 중복 오작동이 발생하지 않음 (`QAS-02 [일관성]`).
 - **노드 크래시 시 자동 해제:** 리더 노드 장애 및 프로세스 급작 정지 시 데이터베이스 커넥션 소켓이 유실(Timeout)되면 RDBMS가 즉시 락을 롤백 및 해제함.
 
-#### 단점
-
+**단점**
 - **장시간 트랜잭션 점유 및 커넥션 풀 고갈 위험:** 락 점유 주기가 배치 기동 시간 전체에 비례하여, 배치 인스턴스 증가 시 DB 커넥션 풀 리소스 고갈 (`QAS-04 [효율성] 부적합`)을 유발함.
 - **락 점유 노드 크래시 시 세션 단절 파급:** 락 점유 노드가 장애로 다운 시 RDBMS 물리 세션 단절과 함께 락이 즉시 롤백되어 작업 중단 유발.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **장시간 트랜잭션 점유 및 커넥션 풀 고갈 위험 → DD-01 (리더 선출) 연계 보완:**
   - 장시간 실행 배치로 인해 DB 커넥션 세션이 고갈될 수 있는 비관적 락의 치명적 약점은 `DD-01` RDBMS Lock-based 리더 선출 대안과의 연계를 통해 보완합니다. 모든 노드가 경쟁적으로 DB 커넥션을 쥐는 것이 아니라, 선출된 단일 리더만 락 점유를 통제하여 전체 커넥션 스레드 점유율을 제한합니다.
 - **락 점유 노드 크래시 시 세션 단절 파급 → DD-04 (장애 저널 복구 전략) 연계 보완:**
@@ -780,56 +790,46 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
 
 
 
-### 4.1.2.2.2 Design Approach 2 - DB Record-based Lease 락
+##### 4.1.2.2.2 Design Approach 2 - DB Record-based Lease 락
 
-#### 개요
-
+**개요**
 메타 RDBMS의 전용 락 테이블에 특정 배치의 점유 정보(`OWNER`, `EXPIRE_AT`)를 기록하여 논리적으로 분산 락을 표현합니다. 락을 가져올 때는 단 한 번의 단기 트랜잭션(UPDATE 쿼리 경쟁)만 수행하고 즉시 DB 커넥션을 반환합니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.2 DD-02 Distributed Lock/4.1.2.2 Design Approaches/Untitled Diagram 1.svg]]
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **Short-lived Transaction Lease Locking:** DB 락 테이블에 `OWNER`, `EXPIRE_AT` 정보를 1회성 UPDATE 쿼리로 기록하고 세션을 즉시 반환하는 방식.
 
-#### 장점
-
+**장점**
 - **커넥션 풀 리소스 최적화:** 락 점유 시 DB 세션을 계속 열어둘 필요 없이 1회성 UPDATE 수행 후 커넥션을 즉시 반환하여 커넥션 고갈을 방지함 (`QAS-04 [효율성]`).
 - **자가 치유 및 데드락 방지:** 락 점유 노드 크래시 발생 시에도 `EXPIRE_AT` 시간이 경과하면 타 노드가 해당 락을 합법적으로 인수/리셋함 (`QAS-01 [가용성]`).
 
-#### 단점
-
+**단점**
 - **노드 크래시 시 EXPIRE_AT 만료 전까지의 락 회수 지연:** 락 점유 노드가 장애로 다운되었을 때 만료 시간(`EXPIRE_AT`) 경과 전까지 락을 타 노드가 즉시 점유하지 못하고 일시 대기해야 함.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **노드 크래시 시 EXPIRE_AT 경과까지의 락 대기 지연 → DD-01 (리더 선출) & DD-04 (장애 저널 복구) 연계 보완:**
   - Lease 락 점유 노드가 장애로 다운되었을 때 만료 시간(`EXPIRE_AT`) 경과 전까지 락을 아무도 가져가지 못하고 일시 대기해야 하는 약점은 `DD-01` 리더 선출 및 `DD-04` 저널 복구 스캐너 대안으로 보완합니다. 신규 리더가 고립 저널을 확인하여 만료된 Lease 락을 안전하게 강제 회수하고 타 생존 노드로 승계시킵니다.
 
 
 
-### 4.1.2.2.3 Design Approach 3 - Socket-based Lock Coordnator 노드 운영
+##### 4.1.2.2.3 Design Approach 3 - Socket-based Lock Coordnator 노드 운영
 
-#### 개요
-
+**개요**
 선출된 리더 노드가 메모리 상에 `ConcurrentHashMap` 등을 구성하여 분산 락 관리자 역할을 대행합니다. 각 워커 노드는 배치를 실행하기 전 리더 노드와 전용 소켓 포트로 TCP 연결을 맺어 락을 신청하고 반환합니다.
 
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.2 DD-02 Distributed Lock/4.1.2.2 Design Approaches/Untitled Diagram 2.svg]]
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **In-Memory Lock Management:** 리더 노드가 메모리 구조(`ConcurrentHashMap`)로 분산 락 관리를 대행하며 TCP 소켓으로 신청/반환.
 
-#### 장점
-
+**장점**
 - **데이터베이스 I/O 배제:** 데이터베이스 트래픽이 전혀 발생하지 않고 메모리 레벨에서 합의가 끝나므로 동시성 응답 속도가 신속함.
 
-#### 단점
-
+**단점**
 - **코디네이터 다운 시 메모리 락 상태 전면 유실:** Lock Coordinator(리더 노드) 장애 시 락 점유 상태가 메모리와 함께 유실되어 장애 복구 및 상태 재구성 구현 복잡도가 극도로 높아짐.
 - **노드 간 소켓 포트 통신 및 보안 규정 미충족:** 노드 간 직접 통신 포트 연결을 강제하여 전용 포트 개방 및 포트 통신 관리 이슈 (`QAS-06 [보안성] 부적합`)가 잔존함.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **코디네이터 다운 시 메모리 락 상태 전면 유실 → DD-01 (리더 선출) 연계 보완 시도 및 한계:**
   - Lock Coordinator 역할을 수행하는 리더 노드 정지 시 메모리 내 락 점유 상태가 소멸하는 치명적 약점은 `DD-01` 리더 선출 알고리즘과 연계하여 신규 리더가 생존 워커 노드들에게 락 상태를 역재질의(Audit)하는 동기화 프로토콜로 보완하려 시도하나, 아키텍처 구현 복잡도가 크게 증가하는 한계가 있습니다.
 - **노드 간 소켓 포트 통신 오버헤드 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
@@ -837,12 +837,12 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
 
 
 
-### 4.1.2.3 Design Decision and Rationale
+#### 4.1.2.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 2 - 데이터베이스 레코드 값 기반 Lease (임대 계약) 락
 
-#### 선정근거
+**선정근거**
 * **데이터베이스 자원 소모 절감:**
   * 장시간(수십 분~수 시간) 가동되는 대형 일 배치 워크로드 작동 시, 세션을 물고 대기하는 물리적 락(비관적 락) 방식을 철저히 탈퇴합니다. 락의 임대(Lease) 획득 및 해제 시점에만 초단기 트랜잭션으로 UPDATE 쿼리를 수행하여 병목 지점의 JDBC 커넥션 풀 리소스를 온전히 보호합니다 (`QAS-02 [성능]`).
 * **임대 기한 만료를 통한 데드락 차단망 구축:**
@@ -850,7 +850,7 @@ Design Approach 2 - 데이터베이스 레코드 값 기반 Lease (임대 계약
 * **네트워크 포트 제한 충족:**
   * 소켓 코디네이터 방식(Approach 3)이 요구하는 서버 간 P2P 통신망 승인 불필요. 기존 데이터베이스 접속 채널만으로 동작해 보안 장벽을 즉시 충족합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: 비관적 RDBMS Lock | Design Approach 2: DB Record Lease (Selected) | Design Approach 3: Socket 코디네이터 |
 | :--- | :---: | :---: | :---: |
 | 자원 효율성 및 성능 (`QAS-02`) | **【부적합】**<br>장시간 가동 배치 시 세션/커넥션 지속 점유 | **【우수】**<br>락 획득/해제 시점 외 커넥션 즉시 반환 | **【우수】**<br>자체 인메모리 제어로 DB 자원 부하 없음 |
@@ -859,8 +859,10 @@ Design Approach 2 - 데이터베이스 레코드 값 기반 Lease (임대 계약
 
 
 
+###4.1.3 DD-03 Distributed Queue
 
 
+#### 4.1.3.1 Design Goal
 
 ### 4.1.3.1 Design Goal
 
@@ -872,36 +874,31 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 
 
 
+####4.1.3.2 Design Approaches
 
 
+##### 4.1.3.2.1 Design Approach 1 - RDBMS Table Polling and Dequeue
 
-### 4.1.3.2.1 Design Approach 1 - RDBMS Table Polling and Dequeue
-
-#### 개요
-
+**개요**
 **DAG Workflow**(Producer) 컴포넌트가 신규 배치 작업 메시지를 공통 RDBMS의 `BATCH_JOB_QUEUE` 테이블에 적재(Push, INSERT)하고, 다중 **Batch Launcher**(Worker Node) 인스턴스들이 주기적으로 DB 쿼리를 기동하여 대기열에서 작업을 인출(Pull, Dequeue)합니다. MySQL 8.0/MariaDB 10.6 이상에서 제공하는 `SKIP LOCKED` 구문을 동반한 비차단 인덱스 스캔을 활용하여 **하나의 작업 메시지를 단 하나의 Batch Launcher만 단일 수신**하도록 상호 배제 정합성을 보장합니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.3 DD-03 Distributed Queue/4.1.3.2 Design Approaches/Untitled Diagram 4.svg]]
 
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEARAggcWQdQHswBrAMwBsCB3AHQQAoAFMAgEwFcYBTMASlWQgAzsmZtOPAFChIseCCRp0AIWQAVEACNyXAFx1lmNQGEAEgH0AUgHll5gIoBVAKIuBw5CunhocRClRlEAgYAAtkABkQdgQwnmQAYgBGOnpMGGgANy5kAHpRAnJyKAQAc35BEUISHiTvWT8FAKCQ8KiYuLBEgCZU9Kyc-MZC4rKKj2riHm7633lFQOCwyOjY0PiEgGY+jKhsvIKikvL3KqIpsE3JSQQCCByCbK6xDm4wABpPZV1kAG0kgB0yAAkgA5ADKzgASmpkEx2EJwhohMReABdSQvCRgAC0AD4VD8wZCYSDQWprMhDCYLDY7E5XM5UkIIMEEQBeADkUOcmHQAE1OZ9QABPSggVjsgHS3iSEC7TLBHJeFQ4-FYt4-cGOYzGZzg8GSVhceVZJVfa63e7IR7xSa1T6Ev7dIGQiLOYyw6VAgBi1ihyEcjCwamcyHBAGlgYxItZjBHnOgMfawEl8U7wWpMKS1FDMBDMJ7gdZQQBuOhuj1e6X4UzQsMstlCLk8vmCugRYEAWWBsKSyD9AaDIbDkejsfjidLcoV5pTdVNe3NKuUarx85+vyh1ESSTRyEAHuOAHNnkIB4HuQgBE+wAAtYBACeQgF92+gADRxEQIMFRyEABIOABAmjSbZ2tLx-0XRVrXnG47geJ58HOaZHW+P5NldYh4Eid8plYZBtyoEQADJ0I-ZBQS4AAPFAcOTOCwG6dNEMzbNYVzfNwULNRizLCtnHdT1kG9Wt62QRsIA5bleQFTkO27XtkH7QdA2DIxRyjGMIjjBN0GnUC52omZtKA5RIOtW0uidHDd0AAXHkEAAvHAAqawAI8cAHnHAAHuwAdDroQAUPtcwBOheQQAx0cAF3HkEACmXABKh+gx0YXhkEAEbXsJ3BJum-P9VXxFNuk3czEv3Y8z0vW8H2fV8MOi38QMA5VDPKs1wN0ozoLtajNgQzcABYgWHJShNZETm25RxQVBMFsE5OF0C4ABHdguGm9FJBTTY6K1LMczzAsixLcsEErXj+LwOseW6psW3E9sEE7Hs+wHf0FJHcMVInDStIq2CakuGcasq+qbRgsyEqST4sqSsKIpU6KYroLLNmSyRUvXJrMoSzYcpPc9rzvR8XzfD9Sr-Y19K+76TNei5mq+H5ABjBwACccAGNrkEAVTXAFQJvLAA6lwAc9sAWvHAA1B5BAFCJwAZjvmpqlturrIVhYTRKhAahtBEb3joMAuCEHhslYcxgnZUFrDwehov2wSACsCE0cwoElTZns+i04YWn5rAjaqlwMoW3sWglEOMawu0u6d8ZehaiZgu34qoRJNkABdHkEAAGbAB1Vh9kEAF1XABwJ5keoRQAAGuwmXhoCtzkEAAYXkEAGbHABO55BAEQJwAf2uQQAI3oz2UgA)
 ![[Pasted image 20260727181222.png]]
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **RDBMS Table Queue & Non-blocking Scan:** `BATCH_JOB_QUEUE` 테이블과 `SKIP LOCKED` 구문을 통해 경쟁적 인출(Competing Consumers)을 처리하는 방식.
 
-#### 장점
-
+**장점**
 - **단일 워커 선점 및 중복 실행 0%:** `SELECT ... FOR UPDATE SKIP LOCKED` 쿼리로 선점된 행을 즉시 스킵하여 중복 수신 차단 (`QAS-01`, `QAS-02`).
 - **트랜잭션 ACID 기반 무유실 보장:** 큐 인출과 작업 기동이 동일 DB 트랜잭션에 묶여 노드 다운 시 즉시 롤백 및 무유실 승계 (`QAS-03`).
 - **추가 인프라 비용 배제 및 이식성 향상:** 별도 메시지 브로커 설치 없이 기존 RDBMS 재사용 (`QAS-08`, `QAS-09`, `NR-09`, `CR-02`).
 
-#### 단점
-
+**단점**
 - **다중 워커 동시 Polling 시 DB 락 대기 및 I/O 병목 위험:** 수많은 워커 노드가 동시에 Polling을 기동할 경우 발생할 수 있는 DB 락 대기 및 Disk I/O 소모 오버헤드.
 - **작업 인출 직후 워커 노드 크래시 발생 시 작업 처리 지연 파급:** 워커 정지 시 DB 세션 단절 및 롤백이 일어나기 전까지 타 워커의 즉시 승계 지연 유발 가능성.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **동시 인출 시 DB 락 대기 및 병목 위험 → DD-05 (공유 영속 저장소) 연계 보완:**
   - 여러 워커 노드가 동시에 Polling 쿼리를 실행할 때 DB 락 대기 병목이 발생할 수 있는 약점은 `DD-05` Shared RDBMS Metatable 대안의 `SELECT ... FOR UPDATE SKIP LOCKED` 비차단 쿼리를 적용하여 보완합니다. 특정 워커가 선점한 행을 타 워커가 즉시 스킵(Skip)하도록 함으로써 락 대기 오버헤드를 방지합니다.
 - **인출 직후 워커 노드 크래시 시 메시지 유실 위험 → DD-04 (장애 저널 복구 전략) 연계 보완:**
@@ -909,10 +906,9 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 
 
 
-### 4.1.3.2.2 Design Approach 2 - Custom TCP Socket Distributed Queue
+##### 4.1.3.2.2 Design Approach 2 - Custom TCP Socket Distributed Queue
 
-#### 개요
-
+**개요**
 `DAG Workflow`(Producer)가 신규 작업 메시지를 선출된 리더 노드의 JVM Heap 인메모리 큐(`LinkedBlockingQueue`)에 TCP Push하고, 각 **Batch Launcher**(Worker Node) 인스턴스들이 리더 노드와 TCP 소켓 연결을 통해 Pull 요청을 보내 단일 메시지를 1:1로 가져가 처리하는 방식입니다.
 
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.3 DD-03 Distributed Queue/4.1.3.2 Design Approaches/Untitled Diagram 1.svg]]
@@ -921,21 +917,17 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 ![[Pasted image 20260727184013.png]]
 
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **In-Memory Socket Queue:** 리더 노드의 JVM Heap 인메모리 큐(`LinkedBlockingQueue`)를 통해 TCP Push/Pull로 메시지를 교환하는 방식.
 
-#### 장점
-
+**장점**
 - **지연 속도 최소화:** DB I/O가 발생하지 않아 초저지연(ns 단위) 메시지 전달이 가능함.
 
-#### 단점
-
+**단점**
 - **Queue Master 정지 시 힙 메모리 적재 작업 전량 유실:** 리더 노드 다운 시 메모리 상의 미처리 작업 대기열이 소멸하여 데이터 무유실(`QAS-03`) 보장 불가.
 - **워커 노드 통신 포트 라우팅 및 인프라 변경 오버헤드:** 다중 워커 노드와 전용 소켓 통신을 위한 포트 개방 및 매니페스트 수정 부담 유발 (`NR-09`, `CR-02`).
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **Queue Master 정지 시 힙 메모리 작업 전량 유실 → DD-05 (공유 영속 저장소) 연계 보완 시도 및 한계:**
   - 리더 노드의 `LinkedBlockingQueue`에 대기 중이던 작업들이 리더 크래시 발생 시 전량 증발하는 치명적 약점은 `DD-05` Shared RDBMS Metatable 대안에 비동기 백업 적재를 결합하여 보완하려 시도할 수 있으나, 이 경우 Pure Socket Queue의 ns 단위 초저지연 성능 이점이 반감되는 한계가 존재합니다.
 - **워커 노드 통신 포트 라우팅 오버헤드 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
@@ -943,10 +935,9 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 
 
 
-### 4.1.3.2.3 Design Approach 3 - RDBMS Job Table and TCP Socket 이벤트 전파
+##### 4.1.3.2.3 Design Approach 3 - RDBMS Job Table and TCP Socket 이벤트 전파
 
-#### 개요
-
+**개요**
 작업 데이터의 보존은 RDBMS 테이블을 활용하되, **DAG Workflow**(Producer)가 신규 작업을 DB에 Push(INSERT)한 후, 다중 **Batch Launcher**(Worker Node) 인스턴스들에게 Direct TCP Socket 시그널을 보내 이벤트를 전파함으로써 평시 DB 폴링 주기를 늘리고 신속 인출을 유도하는 방식입니다.
 
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.3 DD-03 Distributed Queue/4.1.3.2 Design Approaches/Untitled Diagram 3.svg]]
@@ -955,21 +946,17 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 2. 평시 DB 폴링 주기를 길게 유지하던 `Batch Launcher` 워커들이 TCP 시그널 수신 즉시 DB `SELECT ... FOR UPDATE SKIP LOCKED` 쿼리로 인출(Pull) 시도.
 3. 이 중 가장 먼저 DB 락에 도달한 단 하나의 `Batch Launcher` 워커 노드만 메시지 단일 수신 성공.
 
-#### 특징 및 메커니즘
-
+**특징 및 메커니즘**
 - **Hybrid RDBMS Storage + TCP Event Signal:** 작업 영속 저장은 RDBMS 테이블을 활용하되, 신규 작업 적재 시 Direct TCP 소켓 시그널을 발송하여 인출을 유도.
 
-#### 장점
-
+**장점**
 - **DB 폴링 부하 절감:** 이벤트를 수신했을 때만 DB 인출을 시도하여 평시 DB 커넥션 및 Polling 부하를 경감함.
 
-#### 단점
-
+**단점**
 - **네트워크 순간 단절 시 TCP 이벤트 시그널 유실 위험:** 네트워크 변동으로 시그널을 수신하지 못할 경우 DB 테이블에 적재된 작업이 무한 대기할 수 있음.
 - **상시 소켓 커넥션 유지 및 네트워크 포트 개방 오버헤드:** 상시 Direct TCP 연결 킵어라이브/스레드 관리 오버헤드 및 네트워크 포트 개방 매니페스트 수정 부담 유발 (`NR-09`, `CR-02`).
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **TCP 이벤트 시그널 유실 시 작업 방치 약점 → DD-05 (공유 영속 저장소) 백업 폴러 연계 보완:**
   - 네트워크 순간 단절로 TCP 이벤트 시그널을 수신하지 못해 DB 테이블에 적재된 작업이 무한 대기할 수 있는 약점은 `DD-05` Shared RDBMS Metatable 기반의 백업 폴러(Backup Poller) 루틴을 추가하여 보완합니다. 장기 미인출 작업을 주기적으로 스캔해 지연 없이 Dequeue시킵니다.
 - **소켓 커넥션 유지 오버헤드 → DD-01 (리더 선출) 연계 보완:**
@@ -977,12 +964,12 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 
 
 
-### 4.1.3.3 Design Decision and Rationale
+#### 4.1.3.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - RDBMS 테이블 기반 Polling & Dequeue
 
-#### 선정근거
+**선정근거**
 * **단일 메시지-단일 워커 인출(Point-to-Point) 정합성 및 무유실 보장:**
   * `DAG Workflow`(Producer)가 `BATCH_JOB_QUEUE` 테이블에 적재한 1개의 작업 메시지에 대해 다중 `Batch Launcher`(Worker Node) 중 단 하나의 워커만 `SELECT ... FOR UPDATE SKIP LOCKED` 트랜잭션으로 상호 배제 인출합니다. `Batch Launcher` 노드 셧다운 발생 시 DB 세션 단절과 함께 물리 커넥션 락이 즉시 롤백(Rollback)되어 타 워커로 유실 없는 승계가 안정적으로 보장됩니다 (`QAS-01 [일관성]`, `QAS-03 [신뢰성]`).
 * **SKIP LOCKED 기법을 통한 성능 블로킹 방지:**
@@ -990,7 +977,7 @@ Design Approach 1 - RDBMS 테이블 기반 Polling & Dequeue
 * **추가 인프라 배포 절차 제거 및 인프라 호환성:**
   * `DAG Workflow`와 `Batch Launcher` 간 별도의 고가용성 메시지 브로커(ActiveMQ 등)나 노드 간 P2P TCP 통신 포트 개방이 필요하지 않아, 단일 컴파일 및 DB 커넥션 설정 정보 주입만으로 이식성 및 기존 K8s 배포 호환성 (`QAS-08 [이식성]`, `QAS-09 [운영성]`, `NR-09`, `CR-02`)을 충족합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: RDBMS Table Polling (Selected) | Design Approach 2: Custom TCP Socket Queue | Design Approach 3: RDBMS + TCP Socket Event Push |
 | :--- | :---: | :---: | :---: |
 | 단일 수신 일관성 (`QAS-01`) | **【매우 우수】**<br>`DAG Workflow` 메시지를 단 하나의 `Batch Launcher`만 인출 (DB 롤백 무유실) | **【부적합】**<br>리더 다운 시 `DAG Workflow` 적재 대기열 전량 유실 | **【우수】**<br>TCP 연결 신뢰성 확보 및 DB 트랜잭션 연계 |
@@ -1000,8 +987,10 @@ Design Approach 1 - RDBMS 테이블 기반 Polling & Dequeue
 
 
 
+###4.1.4 DD-04 Fault Journaling
 
 
+#### 4.1.4.1 Design Goal
 
 ### 4.1.4.1 Design Goal
 
@@ -1013,34 +1002,32 @@ BatchService 핵심 클러스터링 엔진에서 스케줄러 노드(리더 노�
 
 
 
+####4.1.4.2 Design Approaches
 
 
+##### 4.1.4.2.1 Design Approach 1 - RDBMS Execution Journaling and Dynamic Replay
 
-### 4.1.4.2.1 Design Approach 1 - RDBMS Execution Journaling and Dynamic Replay
-
-#### 개요
+**개요**
 메타 RDBMS에 배치 실행 단계별 저널 레코드(`BATCH_EXECUTION_JOURNAL`)를 영속화하고, 노드 장애 재기동 시 생존 노드 또는 신규 리더가 저널을 스캔하여 미완료 태스크를 자동 재처리(Replay)합니다.
 
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.4 DD-04 Fault Journaling/4.1.4.2 Design Approaches/Untitled Diagram.svg]]
 
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEAFMUC24CeyA6gPZgDWApmMgBQByxAJhcgMQCMAlKsiAM5F2AKCGhIseCCQBzMMQCuwZACUAIgCEAsgGVkmihBDJtEUhSGMQhgEb8WqdQEEAKgGEAEgH0AogA1vrgCqzgCSAPJ0ngBSYYHKdI4AMjz8yBoWViC2fPbKFAC0-HxQ0gjYFEjIAIryFLUpAlVCFYwiYtBwiCiodBQA7siJFCDM1AzMADoINHkwxABuVATaMFIIVNy8Aomi4B2SlagAYiBQADYLVESklNT0TCysAEybqYRPIiAw0PNWLDtfH5-QRCQFQX4QFjvISyBRKdgAOmQDDAuDOyG8AA8KDB5NBiAhkAAyYyQpSuAAWOLIwGIUCQQkI7HyAD4NAAuZCI5AhBDMYAtCooZyYzmELCQ5CU6m0+koGh8QwQeR8AC8AHJtM5HMpnN5VOrOKDvuDgekhBp8qymZyRVLiNhsFAIJDWswwRCWOkmayOcgnkjefzBZURZzAsBLJLpTAaXTKgqlSqNcpAnQ6CE6ABxdUAGmQZ2GOU80HKRo9ZvUFvUVpZNuQdtcDqdLoobuGJs9aSrLREsMU-qR4xYrjA-ApGMWDPdneBTKEfFAMBYFgoirkBHnCGIksu1CZ+b9gEKyZEPNjsKVjvhUxi0TDEZd8AQAaXOhdvAHpkQY+jc0sQ+gQTgpjCMBgApKQG34MgCwoAAzFB6WQRUrGTdVU3TTMc1oIY7AxTFgCgMA2yNXsYTkAcAGYkVw0ZkBOc492JZBQPAyDnGglQcT3PAhG3XdFmoRJOVoq5vELE0CQbLBpGkKg22QVlvwGUTqHEnFXSERJfXUTlqK4uZBOWVYEE5bRvESAJnGQAAqejlDCTRkCcNwvD8AJgnCSIYjiBJEimQh3G8ZRvGQpM1XQtMM2zdVkEcOhVFguxPEUKM208KxkAAHmRMJCBoThFMGIsKE8ZwcAoBQIGNIFJXSS1WWErjlTAQlWIgwkOL4GDZlIdsKzqqttJZKpOQAFiRPJCifEo2rAjqoO6u8VQnUxqlqWpy1nSUmiqWsmu8BAAEcNrbVcBpYJoyP7JQJrSPAEBAJ0YC44AzhAAgSRCZhsFpSFKl6ozGSeVlRuQABWJFVAoE66hYPI3o+xayBq00dqEPbrSeTk8hazrONUTJzu2y6+J3FgmPeTkADYkQANRAM4oDSnkfr+ioYAILN5HARgphoLEcTxKApJCRLGEUJnVklGAqVjI13ixzlBdxSUupgmhHAgfJcMVfIwgQZd7se57XvevAttqqEPkVtldOQAB2QM+QoAUXdDUVkAjFmYzjOVaBQ5UItcRz0EsvUDUttGvSrBq62xhtMXtR1nU0mcre7YmM+hXsgA)
 ![[Pasted image 20260727193155.png]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Step-level Checkpoint:** 배치 작업의 실행 상태(STARTED, RUNNING, COMPLETED, FAILED)를 독립 트랜잭션으로 DB 저널 테이블에 기록함.
 - **Automatic Recovery Scanner:** 리더 선출 이벤트 발생 시 선출된 리더가 `RUNNING` 상태로 남아있는 고립(Orphan) 태스크를 감지하고, 임대 시간(Lease) 초과 여부를 검증하여 재할당 큐로 이관함.
 - **At-Least-Once / Idempotent Execution:** 복구된 작업이 멱등성(Idempotency)을 유지하도록 실행 식별자 기반 중복 방지 가드 적용.
 
-#### 장점
+**장점**
 - 프로세스 다운이나 하드웨어 장애 시에도 DB 영속 저널을 통한 무유실 복구 보장 (`QAS-06`).
 - 추가 인메모리 클러스터링 인프라 없이 JDBC 트랜잭션만으로 완결 가능.
 
-#### 단점
-
+**단점**
 - **배치 단계 전환 시마다 발생되는 RDBMS 저널 쓰기 I/O 오버헤드:** 태스크 진행 상태 변경 시마다 DB 트랜잭션이 수행되는 오버헤드.
 - **노드 장애 시 고립(Orphaned) 저널 발생 및 복구 지연 위험:** 실행 중 노드 크래시 시 저널이 `RUNNING` 상태로 고립되어 즉시 복구되지 않을 위험.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **단계별 RDBMS 저널 쓰기 I/O 오버헤드 → DD-05 (공유 영속 저장소) 연계 보완:**
   - 배치 태스크 단계 전환마다 발생하는 RDBMS 저널 쓰기 부하는 `DD-05` Shared RDBMS Metatable 대안과의 결합으로 경감합니다. 필수 상태 변경 시에만 최적화된 경량 SQL UPDATE/INSERT를 실행하여 DB Write 오버헤드를 최소화합니다.
 - **워커 장애 시 고립 저널 재처리 지연 위험 → DD-01 (리더 선출) & DD-03 (분산 큐) 연계 보완:**
@@ -1048,29 +1035,27 @@ BatchService 핵심 클러스터링 엔진에서 스케줄러 노드(리더 노�
 
 
 
-### 4.1.4.2.2 Design Approach 2 - In-Memory State Replication
+##### 4.1.4.2.2 Design Approach 2 - In-Memory State Replication
 
-#### 개요
+**개요**
 노드 간 직접 TCP 소켓 통신이나 IMDG 인메모리 동기화 채널을 통해 배치 작업의 런타임 진행 상태를 보조 노드로 인메모리 복제(Replication)하는 방식입니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.4 DD-04 Fault Journaling/4.1.4.2 Design Approaches/Untitled Diagram 1.svg]]
 
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIHMwHsCuwAEAFMUAtuAJ7YDqaYA1gKZjYByaAJrdgBTNvYCCAlAChQkWPBBJsAIgAivAOIUq1AGYAbNAHdsAUQTIoCWlOwgAzk1a1eAfT0Gjw8NDiII0gEoYkRdgGUIEAh2HQA3Wkl5CPogqgAdBA4A2hwAoIwzABpsD1oQFmwAeRUVM1oIbIBhNEJCKHdq7wh+E3NLNls04KiEJ1FXCXcpAEkEAFoAWVpCKjIPQ2RsACEMEvoEjgAxcwaoMBgMNXBsLvYAKUwwBBA1FtMLbmsbef0VtbBBCJZBH5EXcUksj2tBg7gAKpVcNgAPTYYYTGSKSoACwkRjUG1wACYoaNJtNZjkUmpYEEoGgEHgqM1WhZsbgbCi0bQ1L9nGI3KhMKkQRSWKQYXhaPQlDQRY9OBKlkI-hzBtIABJ5SAAIzy7gAZNhtlA1BgwOwZOUQRB4ol6e12EqbhBkdgJhT6lQFnc2o8ljYjcFQVQ+v83J5iaTggU8VMZmAyKcTqaDZjhQw-CQEDBaAVw4TcsASTAQK6HlYPVm1AEqLQ-XLAaMzIFJGCQHQ0OEGFrcjAm-QyPZDLQNsNammoEEQgAPEEYaAU7D1xvN-OWj0z2gdsDdxxfH4gUFQULDy22NflrlYPCosrYACMAC5LGBiGpdGODpPKa28moxmDfHgcTG98Xg3JXpHgPfQezGAA+ECbFOHobwvAA6bAehiYIciab8EmjMIIncJJgmAaFilKcohC3aBdzQ6DYIiQRqMCboIkg6CXmQN4VHoG8sSQ8gCDQ7DwkkDYAAYAFJsBkJY4SIopm2RPIWCENhyJ3Pd6OHHpBBUyj2BYhZ2PoH49NeVYOLASD6UZVEEHRG8AGYkICA0QEIOFxgzSMElY5ZTJFHCkC07cdJ-BkmRsllBEssL0WYwtnmJUsDRvAAWRzkxgbAtQmPZ0ETBj2DbKgCkMU1LWWe0CUjQKKLUuLi0S8tlKC4cQBUYIGHdeLswawQmpqtCous9FeryZqqKsWxWIMj46ImuwwKMMZYrYD0vRNKgbwAViQ6ofAQDBMDpX9rVVdUTnSzhcAWaFcApZAyLG3S4rWn0Pj61Tgla9qF09Y1XpG7SWra8U5sPT4EG+QRjxwXAz3YLEbx1PUDQkv6X0ytya3lJcV0EBA0DQld93mhxaEyYy2N8hgAGJNk2GQsQZm8JV4bUQF1GM0BwWFbs0EVCgnEBkFoABCWaVt+71YzGEdoMPG8ADYkJOiA1SCadfEwPCXvcFm2d1fVaCEaqPqeiWdd9TqLfMqC4px5t5ewAB2JCwQIZBhYYJGia1ata3BBtl2bAHHp+62TeCzr7foMHxdoRdA5XQ9lvjrqS1jWgbwADiQ3J8mwAAZYca2wLyg1zEM-zQjZiLKCAtuE4SHv6s3U-qjO46LBKM6W22Jej1cFsz7AAE5c-KfVKTDSqo3yol2zAb53sjuru7LH58cJ5sfoHx2-exxPmxvAAteg0AkqTixAOZaAARwwYEWA2XIzAwQh2BVIIYDtWgnwnIDsBEHfiwIcwQ1BkBUOgVytdyjYE2o3IQUdD4xyHinBOs4UGk3gsJcer936PnHOjBIu1ggjncJAmoRQSh1zgY3EOLcd7IMHqTcG3wgA)
 ![[Pasted image 20260727195256.png]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Memory Replication:** 리더/워커 노드가 작업을 진행할 때 인메모리 링 버퍼에 상태 변경을 기록하고 피어 노드에 P2P 방식으로 동기화.
 - **Instant Takeover:** 노드 정지 시 동기화된 메모리 데이터를 참조하여 즉시 복구.
 
-#### 장점
+**장점**
 - **Zero DB I/O Overhead:** 저널링으로 인한 RDBMS 부하가 전혀 발생하지 않음.
 - **Instant Takeover:** 동기화된 메모리 데이터를 참조해 DB 재조회 없이 즉시 복구.
 
-#### 단점
-
+**단점**
 - 클러스터 전체가 동시에 다운되거나 전원 차단 시 인메모리 저널 데이터가 전면 유실됨 (`QAS-06` 위반 위험).
 - 노드별 복제용 인메모리 링 버퍼 유지로 인한 JVM 힙 메모리 풋프린트 및 P2P 통신망 관리 부담 소모.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
-
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **클러스터 전체 다운 시 인메모리 저널 전면 소멸 위험 → DD-05 (공유 영속 저장소) 연계 보완 시도 및 한계:**
   - 전체 클러스터 동시 정지 시 메모리 상의 링 버퍼 저널이 소멸하는 치명적 약점은 `DD-05` Shared RDBMS Metatable 대안에 비동기 디스크 스냅샷을 보완 연계하려 시도할 수 있으나, 이 경우 Zero DB I/O라는 성능적 장점이 퇴색하고 `QAS-06` 무유실 신뢰성을 온전히 입증하기 힘든 한계가 존재합니다.
 - **노드 링 버퍼 유지에 따른 메모리 풋프린트 오버헤드 → DD-08 (자원 경량화) 연계 보완 시도 및 한계:**
@@ -1078,18 +1063,18 @@ BatchService 핵심 클러스터링 엔진에서 스케줄러 노드(리더 노�
 
 
 
-### 4.1.4.3 Design Decision and Rationale
+#### 4.1.4.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - RDBMS Execution Journaling and Dynamic Replay (RDBMS 저널링 기반 동적 복구)
 
-#### 선정근거
+**선정근거**
 * **무유실 복구 신뢰성 확보:**
   * 프로세스 킬이나 서버 랙 전원 차단 등 장애 시나리오에서도 DB 영속 저널 레코드가 보존되어 장애 발생 전 실행 위치부터 무유실 재처리 복구를 달성합니다 (`QAS-06 [신뢰성]`).
 * **인프라 독립성 및 호환성 보장:**
   * 별도의 인메모리 클러스팅 노드 구축 없이 기존 DB 스키마에 저널 메타테이블만 추가하므로 하위 호환성 (`NR-03`) 및 이식성 (`QAS-08`)을 충족합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: RDBMS 저널링 (Selected) | Design Approach 2: In-Memory 동기화 |
 | :--- | :---: | :---: |
 | 복구 신뢰성 (`QAS-06`) | **【매우 우수】**<br>전원 차단 시에도 DB 영속 데이터 기반 무유실 복구 | **【부적합】**<br>전체 랙 다운 시 인메모리 저널 유실 발생 |
@@ -1098,8 +1083,10 @@ Design Approach 1 - RDBMS Execution Journaling and Dynamic Replay (RDBMS 저널�
 
 
 
+###4.1.5 DD-05 Persistent Storage
 
 
+#### 4.1.5.1 Design Goal
 
 ### 4.1.5.1 Design Goal
 
@@ -1110,29 +1097,29 @@ BatchService 핵심 클러스터링 엔진에서 노드 간 상태 합의(Heartb
 
 
 
+####4.1.5.2 Design Approaches
 
 
+##### 4.1.5.2.1 Design Approach 1 - Shared RDBMS Metatable
 
-### 4.1.5.2.1 Design Approach 1 - Shared RDBMS Metatable
-
-#### 개요
+**개요**
 이미 서비스 인프라에 구축되어 있는 메타 RDBMS(Oracle, MySQL, PostgreSQL 등) 내에 분산 제어용 메타테이블(`BATCH_CLUSTER_MEMBER`, `BATCH_LOCK`, `BATCH_QUEUE`)을 생성하고 JDBC 트랜잭션을 통해 클러스터링 합의를 처리하는 방식입니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.5 DD-05 Persistent Storage/4.1.5.2 Design Approaches/Untitled Diagram 1.svg]]
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIHMwHsCuwAEAhEEMAFtgHJoAmAptgILYAUAMlSNWGZVQJQBQokWPBBJsAInyESLNlQ4BRBMigIaAMmwBlYlQoYANnLHYQAZ07VaAfUXLV-cNDiII4gCJRTEMFABGGCF1sAGE0BBgMMDAqcIBPELDvNH1DMGMzCyprJjQYAGsAWVReGIpeB0FnERR0LHFNInAggqoIEGwAJTdcAs1GAHkwEBhDAHoC2M0ARSZRgAU0L1QqaaZuYwBiADFaLYBWLa2Kp2FRCVoAFWCACStgpgBVTQv5DqsC+QLcV4AdBAZrqxIL5WK4NC0ALYgjiaNoQDCmdYmczdd5UKFyC4gXyGY5CFziXCXG5WJj9YIAaT+DDmVFMpigEM8Tmwo2wMlMNBy+SRGVR3LyWJxVDxVTORKutymD3kMupHi8Pn8gQo2AAUmhfNgphgqLreSjcFYdXqqELcaVyqLTjVMDhJMRMnhGAB1NBgPJyTJ8AQnAliQGOEEEbAaE26hIIUwYCFGZGZI2hKMxuTW-0Okhuj1e+QADyoEWgYWwthUVHS5nI1CNpfslvKqDt2DmjU52AAjAAuJ30QPA0EAGnZrHY7NyeToMAAjhhPFAiwhQ+rNZ0qMpFQQoGFeFWsjYlGWALQAPl32XHRTA3fbADpsABJBDzqAEGh9iDBsHD2QcAWr1QAO4gPovDDNAABur6ZOe+SXuUZ6kheqAnqikLQuaVDdgATHeDxzG4lzyNgfwSiS9xPC8bwfF8rzEf8HTJJh7LyLQbivEOsIEAi3Z4XwYFQJBgTYKh6LodiuIiRiYAYYeJ4IQKl7du+n7YA8wAUK+ZTUPxgk0JJYnCvBXAwYUyHHvy44Yd2ADMuH4YReDErcZKUnRmjyBc2BoABqhgFYCBcFYUAUAAvAA5GeYV0QwtDBPebjfm2Ap8TAEFQRZ+QYbwGWCuJVCyaexmIbBqDdhyXLjiWuaBAg1BaawqUCelRoCll2mNbp0HFaZYBGZY+52Pl5lGuGZp5d2AAsd73qQ7kdJ5M0XP0dGkVKMoytFnHwqY3ZzPIpBuDNADiKVpUJqKjVlF26rqMlyUVtZMRqWodGuzJyLovDtWdekjTdY2GfWjZ1C2Zg0Fh3a7s6WaehwymDtq-3Nsk+gqMgS55gWARbggO5cImYTRrGYAoUaaGYuN2B7HZBEvCtTl3I8zyvO8nzfB00UMYY3Yuv0HQUuxWhwtxqlzKdTVCbuBPJsToEdc1aJSVdZOiRTwoFVLdyEymV7YOTMLC+YakaSqX0NT9wkq0reV9VQ0tE3IpPGv9VnYAAbHe7lMPIwSeRoeG00RJEM9KspB-8Wx86LgdaBS95zOy5IC244udddprK87Gd5Rr+NazLcjds9IT6CAjJBAwGzPYe7YAAztnw30S79We3TbePVvnDsk4VnePd2ADsd4XD4yDIF6wREBgCATpjhY43LFua49Hd2wNR692v-fYAAHHec8BDQJEEI6uAImW9JjsoMDRZP08TnM6AwHSDJKHwy8Hqoued0m3fdnfM8qpYwXAkCEwBDCmybp1D+g1bb2x1k7S6lMACcNMHLB0lMada4d3KeS8FxUw4U3D9FIPIMKi9m6W1bgDCSf1s7q3uj-bWxMi4ri2giVS6lNLRWIaQxu5tKHpzboZKBUFNa-x1uUS0QA)
 ![[Pasted image 20260727204045.png]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Zero External Middleware:** Zookeeper/Redis 클러스터 등의 별도 서버 노드 추가 설치가 필요 없음.
 - **Strict ACID Transactions:** RDBMS의 트랜잭션 isolation level 및 비관적/임대 락 기능을 활용해 확실한 데이터 정합성 보장.
 - **Port Reuse:** 노드 간 직접 통신 없이 DB 접속 포트만으로 클러스터링 동기화 완료.
 
-#### 장점
+**장점**
 - VM/K8s 어떠한 인프라 타겟에도 수정 없이 즉시 배포 가능 (`QAS-08`, `QAS-09`).
 
-#### 단점
+**단점**
 - **중앙 RDBMS 메타 I/O 트래픽 집중 부하:** 클러스터 노드 및 배치 작업 증가 시 중앙 DB로 Polling 및 Heartbeat 쿼리가 집중되는 리스크.
 - **동시성 급증 시 DB 커넥션 풀 고갈 위험:** 세션 점유 증가 시 DB 커넥션 풀 부족을 유발할 수 있음.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **중앙 RDBMS I/O 트래픽 집중 부하 → DD-08 (노드 자원 경량화) 연계 보완:**
   - RDBMS로 메타 트래픽이 집중되는 약점은 `DD-08` Lightweight Custom Coordinator Engine 대안으로 보완합니다. 노드 런타임에는 불필요한 DB 조회를 자제하고 수 초 주기의 경량 Heartbeat 쿼리만 수행하도록 통제하여 DB 디스크 I/O 오버헤드를 극소화합니다.
 - **DB 커넥션 풀 고갈 위험 → DD-02 (분산 락) 연계 보완:**
@@ -1140,20 +1127,20 @@ BatchService 핵심 클러스터링 엔진에서 노드 간 상태 합의(Heartb
 
 
 
-### 4.1.5.2.2 Design Approach 2 - Shared Network File System
+##### 4.1.5.2.2 Design Approach 2 - Shared Network File System
 
-#### 개요
+**개요**
 K8s `ReadWriteMany` PV(Persistent Volume), NFS, AWS EFS 등 네트워크 공유 디스크 볼륨을 클러스터 각 노드에 마운트하고, 디스크 상의 공유 메타 파일 및 OS 수준의 POSIX File Lock (`flock`, Java `FileChannel.lock()`)을 이용하여 분산 합의 및 상태 저장/동기화를 수행하는 방식입니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.5 DD-05 Persistent Storage/4.1.5.2 Design Approaches/Untitled Diagram.svg]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Shared Volume Persistence:** 별도 RDBMS나 NoSQL 서버 미들웨어 없이 네트워크 파일 시스템 디스크만으로 영속화 및 클러스터 메타데이터 공유.
 - **POSIX File Lock Synchronization:** OS/네트워크 파일 시스템 수준의 파일 락을 활용하여 배타적 락(Mutual Exclusion) 및 상태 업데이트 보장.
 
-#### 단점
+**단점**
 - **인프라 종속성 유발 (`NR-04` 저해):** K8s/VM 배포 환경마다 ReadWriteMany/NFS 전용 스토리지 클래스 구축 및 관리 부담 발생.
 - **파일 락 지연 및 Stale Lock 위험 (`QAS-02` 저해):** 네트워크 파일 시스템의 POSIX lock 연산 latency 및 노드 크래시 시 lock 미해제(Stale Lock) 복잡성으로 피크 타임 동시성 성능 저하 우려.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **POSIX 파일 락 지연 및 Stale Lock 미해제 약점 → DD-02 (분산 락) 연계 보완 시도 및 한계:**
   - 네트워크 파일 시스템의 POSIX `flock` 연산 지연 및 노드 다운 시 파일 락이 해제되지 않는(Stale Lock) 치명적 약점은 `DD-02` DB Record-based Lease 락 대안으로 저장소를 대체해야만 보완이 가능하므로, 본 Shared NFS 방식의 한계를 드러냅니다.
 - **ReadWriteMany 스토리지 마운트 구속 오버헤드 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
@@ -1161,20 +1148,20 @@ K8s `ReadWriteMany` PV(Persistent Volume), NFS, AWS EFS 등 네트워크 공유 
 
 
 
-### 4.1.5.2.3 Design Approach 3 - Embedded Local Disk DB and Peer Sync
+##### 4.1.5.2.3 Design Approach 3 - Embedded Local Disk DB and Peer Sync
 
-#### 개요
+**개요**
 각 노드가 SQLite, RocksDB 등 임베디드 파일 데이터베이스를 애플리케이션 내에 결합하여 로컬 디스크 파일로 상태를 영속 저장하고, 노드 간 P2P 네트워크 통신(Raft, Gossip 프로토콜)을 통해 각 노드의 디스크 변경사항을 복제/동기화하는 방식입니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.5 DD-05 Persistent Storage/4.1.5.2 Design Approaches/Untitled Diagram 2.svg]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Fast Local Disk I/O:** 읽기 및 쓰기를 외부 미들웨어 없이 로컬 NVMe/SSD 디스크에 직접 수행하여 빠른 응답속도 제공.
 - **Consensus-based Replication:** Raft 합의 프로토콜 기반으로 로컬 디스크 커밋 로그를 타 노드 디스크로 전파/복제.
 
-#### 단점
+**단점**
 - **보안 포트 제약 발생:** 노드 간 P2P 데이터 동기화를 위해 전용 통신 포트 개방 필요 (단일 DB 포트 사용 방침 및 고객사 보안 규정 미충족).
 - **Stateful Pod 관리 부담:** K8s Pod 재시작 시 로컬 디스크 데이터 유실 방지를 위한 StatefulSet / HostPath PVC 마운트 및 복구 절차 복잡화.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **Pod 재시작 시 로컬 파일 DB 소멸 위험 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완:**
   - 노드(Pod) 재기동 시 SQLite/RocksDB 등의 로컬 디스크 파일이 초기화되어 영속 데이터가 소멸할 수 있는 약점은 `DD-07` K8s StatefulSet의 `volumeClaimTemplates` 로컬 PV 바인딩 대안으로 보완하여 Pod 재가동 후에도 디스크 파일 상태를 유지시킵니다.
 - **노드 간 동기화 네트워크 관리 부담 → DD-01 (리더 선출) 연계 보완:**
@@ -1182,12 +1169,12 @@ K8s `ReadWriteMany` PV(Persistent Volume), NFS, AWS EFS 등 네트워크 공유 
 
 
 
-### 4.1.5.3 Design Decision and Rationale
+#### 4.1.5.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - Shared RDBMS Metatable (기존 공유 RDBMS 메타테이블 활용 방식)
 
-#### 선정근거
+**선정근거**
 * **외부 인프라 의존성 제거 (Zero External Middleware & Storage Class):**
   * 별도 IMDG/NoSQL 미들웨어는 물론 NFS/ReadWriteMany 전용 스토리지 클래스 요구사항을 전면 배제하여 하이브리드 배포성 (`QAS-08 [이식성]`) 및 자동 구성/운영성 (`QAS-09 [운영성]`, `NR-04`)을 만족합니다.
 * **보안 컴플라이언스 및 단일 포트 환경 통과:**
@@ -1195,7 +1182,7 @@ Design Approach 1 - Shared RDBMS Metatable (기존 공유 RDBMS 메타테이블 
 * **파일 락 불안정성 및 정합성 리스크 차단:**
   * 공유 파일 시스템의 POSIX Stale Lock 문제나 로컬 디스크 복제 동기화 지연 없이, RDBMS의 엄격한 ACID 트랜잭션 및 비관적 락으로 데이터 일관성을 보장합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: Shared RDBMS (Selected) | Design Approach 2: Shared Network File System | Design Approach 3: Embedded Local Disk DB & Peer Sync |
 | :--- | :---: | :---: | :---: |
 | 이식성 및 배포성 (`QAS-08`) | **【매우 우수】**<br>기존 DB 접속정보만 주입하면 어디서나 배포 완료 | **【보안/인프라 허들】**<br>K8s ReadWriteMany PV / NFS 전용 스토리지 구축 필수 | **【보안 허들】**<br>노드 간 P2P 데이터 복제 전용 포트 개방 필요 |
@@ -1204,8 +1191,10 @@ Design Approach 1 - Shared RDBMS Metatable (기존 공유 RDBMS 메타테이블 
 
 
 
+###4.1.6 DD-06 Engine Deployment Structure
 
 
+#### 4.1.6.1 Design Goal
 
 ### 4.1.6.1 Design Goal
 
@@ -1216,27 +1205,27 @@ Design Approach 1 - Shared RDBMS Metatable (기존 공유 RDBMS 메타테이블 
 
 
 
+####4.1.6.2 Design Approaches
 
 
+##### 4.1.6.2.1 Design Approach 1 - Embedded Library Pattern
 
-### 4.1.6.2.1 Design Approach 1 - Embedded Library Pattern
-
-#### 개요
+**개요**
 자체 분산 엔진 모듈을 기존 배치 애플리케이션의 internal JAR 라이브러리로 포함하여, 동일 JVM 힙 영역 내에서 인-프로세스(In-Process) 형태로 분산 코디네이션 모듈이 실행되도록 구성하는 방식입니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.6 DD-06 Engine Deployment Structure/4.1.6.2 Design Approaches/Untitled Diagram.svg]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **In-Process Coordination:** 배치 스케줄러 런타임과 분산 엔진이 통신 IPC 없이 직접 Java API 수준에서 상호작용.
 - **Single Artifact Delivery:** 별도의 분산 엔진 프로세스나 컨테이너를 추가 관리할 필요 없이, 단일 JAR/WAR 배포파일만으로 배포 완료.
 
-#### 장점
+**장점**
 - 프로세스 간 IPC/소켓 추가 오버헤드가 없으며 응답 지연 최소화.
 - 외부 데몬 설치나 K8s Sidecar 스펙 작성이 필요 없어 배포성 및 이식성 우수 (`QAS-08`, `QAS-09`).
 
-#### 단점
+**단점**
 - **JVM Heap 메모리 공유에 따른 메모리 경합 우려:** 배치 앱과 분산 코디네이터가 동일 JVM 힙 영역을 공유함에 따라 발생할 수 있는 메모리 간섭 및 GC 지연 위험.
 - **라이브러리 내부 클러스터 상태 관리의 구조적 복잡성:** 인-프로세스 모듈 내부에서 직접 상태 관리를 수반할 경우 복잡도 및 메모리 사용량 증대 우려.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **JVM Heap 메모리 공유에 따른 메모리 경합 약점 → DD-08 (노드 자원 경량화) 연계 보완:**
   - 배치 앱과 분산 코디네이터가 동일 JVM 힙 영역을 공유함에 따라 발생할 수 있는 메모리 간섭 및 GC 지연 위험은 `DD-08` Lightweight Custom RDBMS Coordinator Engine 대안으로 보완합니다. 엔진 런타임 상주 메모리를 수 MB(50MB 이하)로 최소화하여 애플리케이션 메모리 영역 침범을 차단합니다.
 - **클러스터 상태 관리 복잡성 → DD-05 (공유 영속 저장소) 연계 보완:**
@@ -1244,20 +1233,20 @@ Design Approach 1 - Shared RDBMS Metatable (기존 공유 RDBMS 메타테이블 
 
 
 
-### 4.1.6.2.2 Design Approach 2 - Standalone Sidecar Daemon Pattern
+##### 4.1.6.2.2 Design Approach 2 - Standalone Sidecar Daemon Pattern
 
-#### 개요
+**개요**
 분산 코디네이터 엔진을 별도의 독립 데몬 프로세스 또는 Kubernetes Sidecar 컨테이너로 분리하여 gRPC/REST API로 배치 애플리케이션과 연동하는 방식입니다.
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.6 DD-06 Engine Deployment Structure/4.1.6.2 Design Approaches/Untitled Diagram 1.svg]]
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Decoupled Lifecycle:** 배치 애플리케이션과 코디네이터의 수명 주기가 독립적으로 격리됨.
 - **Polyglot Support:** Java 외 타 언어 배치 애플리케이션도 코디네이터 연동 가능.
 
-#### 단점
+**단점**
 - 프로세스 간 로컬 소켓/HTTP 통신 지연(IPC Latency) 발생.
 - 독립 데몬/Sidecar 컨테이너의 헬스체크 및 개별 수명주기 관리 모니터링 부담 유발 (`QAS-09`).
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **독립 데몬/Sidecar 컨테이너 관리 오버헤드 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완 시도 및 한계:**
   - 메인 컨테이너 외에 별도 Sidecar 데몬 컨테이너의 헬스체크 및 수명주기를 관리해야 하는 운영 오버헤드는 `DD-07` K8s StatefulSet pod spec 내 `lifecycleContainer` 및 gRPC 헬스체크 정의로 보완하려 시도하나, 매니페스트 복잡성 및 인프라 매니페스트 변경 최소화 지침(`NR-09`, `CR-02`)을 위배하게 됩니다.
 - **IPC/소켓 통신 지연(Latency) 약점 → DD-09 (하위 호환성 보장) 연계 보완:**
@@ -1265,18 +1254,18 @@ Design Approach 1 - Shared RDBMS Metatable (기존 공유 RDBMS 메타테이블 
 
 
 
-### 4.1.6.3 Design Decision and Rationale
+#### 4.1.6.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - Embedded Library Pattern (임베디드 라이브러리 형태 패키징)
 
-#### 선정근거
+**선정근거**
 * **기존 시스템과의 호환성 및 개발 편의성:**
   * 기존 BatchService의 Java/Spring 환경에 JAR 의존성 탑재만으로 코디네이터 연동을 완결하므로, 인터페이스 및 실행 환경 변경 없는 하위 호환성 (`NR-03`, `NR-09`, `CR-02`, `BG-03`)을 충족합니다.
 * **배포 및 운영 경량화:**
   * 독립 데몬이나 Sidecar 컨테이너를 개설/관리하는 부담을 제거하여 기존 K8s 배포 매니페스트를 변경하지 않고 VM 및 K8s 하이브리드 배포 용이성 (`QAS-08 [이식성]`, `QAS-09 [운영성]`, `NR-09`, `CR-02`)을 보장합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: Embedded Library (Selected) | Design Approach 2: Standalone Sidecar Daemon |
 | :--- | :---: | :---: |
 | 배포 이식성 및 K8s 영향 (`QAS-08`, `NR-09`, `CR-02`) | **【매우 우수】**<br>단일 애플리케이션 빌드 파일만으로 배포 완료, 기존 K8s 매니페스트 변경 0건 | **【보통】**<br>별도 데몬 설치 또는 Sidecar Pod 매니페스트 변경 필수 |
@@ -1285,8 +1274,10 @@ Design Approach 1 - Embedded Library Pattern (임베디드 라이브러리 형�
 
 
 
+###4.1.7 DD-07 K8s Replica Controller
 
 
+#### 4.1.7.1 Design Goal
 
 ### 4.1.7.1 Design Goal
 
@@ -1298,15 +1289,15 @@ Kubernetes 환경에서 다중 스케줄러 인스턴스의 안정적 수명 주
 
 
 
+####4.1.7.2 Design Approaches
 
 
+##### 4.1.7.2.1 Design Approach 1 - K8s StatefulSet
 
-### 4.1.7.2.1 Design Approach 1 - K8s StatefulSet
-
-#### 개요
+**개요**
 Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 영속적이고 예측 가능한 고유 인덱스 식별자(`batch-scheduler-0`, `batch-scheduler-1` 등) 및 서술적 호스트명을 부여하여 인스턴스 수명 주기를 정밀 제어하는 방식입니다.
 
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **고정 식별자 기반 메타데이터 오염 방지 (`DD-01`, `DD-05` 연계):**
   - Pod 재기동 및 롤링 배포 시에도 호스트명이 동일하게 유지되므로 RDBMS `BATCH_MEMBER` 테이블의 기존 멤버 튜플을 Heartbeat UPDATE로 즉시 재활용합니다.
   - 무작위 해시 식별자 생성으로 인한 불필요한 유령(Zombie) 멤버 레코드 누적과 클러스터 쿼럼 계산 왜곡을 원천 차단합니다.
@@ -1318,16 +1309,16 @@ Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 �
 - **외부 스토리지 미들웨어 의존성 배제 (`DD-05`, `DD-06`, `CR-02` 연계):**
   - Shared RDBMS를 메타 저장소로 사용하므로 PV/PVC 전용 스토리지 클래스나 외부 NFS 구축 없이 무상태 형태(Stateless-like)로 StatefulSet 매니페스트만 적용하여 기존 K8s 배포 환경에 적용 가능합니다.
 
-#### 장점
+**장점**
 - RDBMS 멤버십 정합성을 보장하여 유령 노드 레코드 누적 위험 배제 (`DD-01`, `DD-05`).
 - 팔로워 선(先) 배포/리더 후(後) 배포로 무중단 연속 가용성 및 자가 치유 우수 (`QAS-04`, `QAS-05`).
 - 재기동 후 장애 저널 소유권 즉시 인지로 무유실 장애 복구 달성 (`QAS-06`).
 
-#### 단점
+**단점**
 - **StatefulSet 사용 시 전용 PV/PVC 스토리지 작성 및 구속 복잡성:** 일반적인 StatefulSet 적용 시 전용 볼륨 마운트 스펙 및 스토리지 클래스 구축 부담 우려.
 - **순차적 롤링 배포 시 리더 Pod 재기동 동안의 일시적 리더십 공백:** 리더 Pod(`batch-0`) 재기동 수 초간의 순간적인 리더 승계 지연 유발.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **StatefulSet의 PV/PVC 마운트 작성 복잡도 및 스토리지 구속 약점 → DD-05 (공유 영속 저장소) & DD-06 (엔진 배포 구조) 연계 보완:**
   - 일반적인 StatefulSet 적용 시 전용 PV/PVC 볼륨 마운트 스펙을 작성해야 하고 스토리지를 구축해야 하는 약점은 `DD-05` Shared RDBMS Metatable 및 `DD-06` Embedded Library Pattern 대안으로 보완합니다. 별도 PV/PVC 마운트 없이 무상태(Stateless-like)로 StatefulSet을 배포하여 고정 인덱스(`batch-0`) 및 `OrderedReady` 롤링 배포 장점만 경량 추출합니다.
 - **롤링 배포 시 수 초간의 리더 승계 지연 → DD-04 (장애 저널 복구 전략) 연계 보완:**
@@ -1335,12 +1326,12 @@ Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 �
 
 
 
-### 4.1.7.2.2 Design Approach 2 - K8s Deployment
+##### 4.1.7.2.2 Design Approach 2 - K8s Deployment
 
-#### 개요
+**개요**
 일반적인 무상태(Stateless) 애플리케이션용 Kubernetes Deployment 컨트롤러를 채택하여 복제본(Replicas)을 관리하는 방식입니다.
 
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **무작위 해시 식별자 생성 (`batch-scheduler-7d4bf9475-x8q2z`):**
   - 파드 재기동 및 롤링 배포 시마다 새로운 무작위 해시 이름이 부과됩니다.
 - **RDBMS 메타데이터 오염 및 멤버십 혼선 (`DD-01`, `DD-05` 연계):**
@@ -1352,12 +1343,12 @@ Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 �
 - **장애 저널 고아화(Orphaned Journal) 및 복구 지연 (`DD-04` 연계):**
   - 재기동된 Pod가 이전 Pod의 식별자를 잃어버리므로, 이전 노드가 남긴 미완료 저널 작업(`EXEC_NODE_ID`)을 즉시 찾아 처리하지 못하고 타임아웃 만료 시까지 복구가 지연됩니다.
 
-#### 단점
+**단점**
 - RDBMS 멤버십 테이블 내 유령 노드 레코드 지속 누적으로 데이터 정합성 저해 (`DD-01`, `DD-05`).
 - 롤링 배포 중 리더 동시 교체로 인한 클러스터 쿼럼 이탈 및 자가 치유 SLA 미달 우려 (`QAS-04`).
 - 저널 복구 소유권 상실로 인한 장애 발생 시 무유실 복구 지연 유발 (`QAS-06`).
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **무작위 해시 식별자로 인한 유령 레코드 누적 약점 → DD-05 (공유 영속 저장소) 연계 보완 시도 및 한계:**
   - Deployment 사용 시 무작위 해시 Pod ID가 생성되어 DB 멤버십 테이블에 유령(Zombie) 튜플이 지속 누적되는 치명적 약점은 `DD-05` Shared RDBMS Metatable 내에 만료된 노드를 정기 cleanup하는 별도 스케줄러로 보완하려 시도할 수 있으나, 유령 레코드 생성 자체를 억제하지 못해 쿼럼 정합성 혼선을 해결할 수 없습니다.
 - **저널 소유권 식별 불능으로 인한 장애 복구 지연 → DD-04 (장애 저널 복구) 연계 보완 시도 및 한계:**
@@ -1365,12 +1356,12 @@ Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 �
 
 
 
-### 4.1.7.3 Design Decision and Rationale
+#### 4.1.7.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - Kubernetes StatefulSet (StatefulSet 기반 복제본 제어)
 
-#### 선정근거
+**선정근거**
 * **RDBMS 멤버십 정합성 보장 및 유령 레코드 방지 (`DD-01`, `DD-05` 연계):**
   * `batch-scheduler-0`과 같이 고정된 서술적 Pod 인덱스 식별자가 유지되므로, Pod 재기동 시 RDBMS `BATCH_MEMBER` 테이블의 기존 멤버 레코드를 1:1로 즉시 재활용(Heartbeat UPDATE)하여 메타데이터 오염 및 클러스터 쿼럼 계산 왜곡을 원천 차단합니다 (`SF-01`, `SF-05`, `CR-02`).
 * **순차적 롤링 배포를 통한 리더 폭포 장애 차단 및 자가치유 보장 (`DD-01` 연계):**
@@ -1378,7 +1369,7 @@ Design Approach 1 - Kubernetes StatefulSet (StatefulSet 기반 복제본 제어)
 * **장애 저널 즉시 소유권 인지 및 무유실 복구 (`DD-04` 연계):**
   * 재기동된 Pod가 동일한 식별자(`EXEC_NODE_ID`)를 그대로 승계하여 자신이 중단시킨 미완료 실행 저널 작업을 즉시 식별하고 복구할 수 있어 장애 복구 신뢰성 (`QAS-06 [신뢰성]`) 요구사항을 충족합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: StatefulSet (Selected) | Design Approach 2: Deployment |
 | :--- | :---: | :---: |
 | RDBMS 멤버십 정합성 (`DD-01`, `DD-05`) | **【매우 우수】**<br>고정 Pod 식별자로 DB 멤버 튜플 1:1 재활용 및 Zombie 방지 | **【부적합】**<br>무작위 해시 식별자로 DB 멤버 튜플 무한 누적 및 쿼럼 혼선 |
@@ -1388,8 +1379,10 @@ Design Approach 1 - Kubernetes StatefulSet (StatefulSet 기반 복제본 제어)
 
 
 
+###4.1.8 DD-08 Resource Optimization
 
 
+#### 4.1.8.1 Design Goal
 
 ### 4.1.8.1 Design Goal
 
@@ -1400,27 +1393,27 @@ Design Approach 1 - Kubernetes StatefulSet (StatefulSet 기반 복제본 제어)
 
 
 
+####4.1.8.2 Design Approaches
 
 
+##### 4.1.8.2.1 Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine
 
-### 4.1.8.2.1 Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine
-
-#### 개요
+**개요**
 인메모리 데이터 셋 축적 및 피어 노드 간 대용량 메모리 동기화 로직을 전면 배제하고, JDBC 커넥션 기반의 초경량 분산 코디네이터 엔진을 내재화하여 구축하는 방식입니다.
 
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Stateless Internal Logic:** 노드 런타임은 분산 합의 및 락 임대 상태를 최소한의 VO 객체로 관리하며, 실제 영속 상태는 RDBMS 메타테이블로 이관.
 - **Low Memory Footprint:** JVM Heap 추가 상주 메모리가 불과 수 MB(50MB 이하) 수준에 불과함.
 
-#### 장점
+**장점**
 - Hazelcast 대비 메모리/CPU 오버헤드 50% 이상 절감 달성 (`QAS-07`).
 - 저사양 컨테이너(0.5 CPU, 512MB RAM) 환경에서도 안정적 구동.
 
-#### 단점
+**단점**
 - **인메모리 전용 데이터 그리드 대비 RDBMS I/O Latency 발생 우려:** 메모리 내 처리 방식에 비해 DB 트랜잭션을 경유함에 따른 수 ms 수준의 지연 소모.
 - **공통 RDBMS 상시 접속 및 커넥션 의존성:** DB 서버 접속 상태 또는 네트워크 변동 시 코디네이션 기능 간섭 우려.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **인메모리 전용 그리드 대비 RDBMS I/O Latency 발생 약점 → DD-06 (엔진 배포 구조) & DD-02 (분산 락) 연계 보완:**
   - 메모리 데이터 그리드(IMDG) 대비 RDBMS 조회를 경유함에 따라 수 ms의 I/O 지연이 발생할 수 있는 약점은 `DD-06` Embedded Library Pattern 및 `DD-02` Lease 락 대안으로 보완합니다. 프로세스 간 IPC 통신 추가 지연을 차단하고 1회성 단기 트랜잭션만 수행하도록 제어하여 전체 응답시간을 단축합니다.
 - **DB 상시 접속 의존성 → DD-05 (공유 영속 저장소) 연계 보완:**
@@ -1428,20 +1421,20 @@ Design Approach 1 - Kubernetes StatefulSet (StatefulSet 기반 복제본 제어)
 
 
 
-### 4.1.8.2.2 Design Approach 2 - Heavyweight IMDG Framework
+##### 4.1.8.2.2 Design Approach 2 - Heavyweight IMDG Framework
 
-#### 개요
+**개요**
 Hazelcast, Infinispan 등 무거운 IMDG(In-Memory Data Grid) 프레임워크 라이브러리를 애플리케이션에 탑재하여 인메모리 맵 및 분산 락/큐 파티션을 관리하는 방식입니다.
 
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Partitioned In-Memory Store:** 노드 간 힙 메모리의 일정 영역(최소 수백 MB)을 클러스터 데이터 파티션으로 할당.
 - **Background P2P Heartbeat:** 상시 백그라운드 소켓 스레드 가동으로 CPU 자원 지속 소모.
 
-#### 단점
+**단점**
 - 노드당 JVM Heap 메모리 점유가 크고 GC Stop-the-World 지연 발생 리스크 유발.
 - 자원 오버헤드 50% 절감 목표 (`QAS-07`, `NR-05`) 달성 불가.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **JVM Heap 메모리 고소모 및 GC 지연 약점 → DD-07 (K8s 복제본 관리 컨트롤러) 연계 보완 시도 및 한계:**
   - 수백 MB 파티션 맵 할당 및 GC Stop-the-World 지연을 야기하는 IMDG의 치명적 약점은 `DD-07` K8s StatefulSet pod resource request/limit 상향 조정으로 노드 자원을 수용하려 시도하나, 저사양 클라우드 환경 배포 지침(`QAS-07`, `NR-05`)을 위배하는 한계가 존재합니다.
 - **P2P 백그라운드 소켓 스레드의 CPU 지속 소모 → DD-05 (공유 영속 저장소) 연계 보완:**
@@ -1449,18 +1442,18 @@ Hazelcast, Infinispan 등 무거운 IMDG(In-Memory Data Grid) 프레임워크 �
 
 
 
-### 4.1.8.3 Design Decision and Rationale
+#### 4.1.8.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine (자체 경량화 RDBMS 코디네이터 엔진)
 
-#### 선정근거
+**선정근거**
 * **자원 점유율 최적화 (Hazelcast 대비 50% 이상 절감):**
   * 인메모리 파티션 맵 동기화 로직을 생략하고 JDBC 트랜잭션으로 상태를 영속화하여 JVM Heap 추가 사용량을 50MB 이내로 억제합니다 (`QAS-07 [효율성]`, `NR-05`).
 * **저사양 클라우드 인프라 운용 효율 확보:**
   * CPU 코어 점유율이 낮아 0.5 vCPU 수준의 저사양 K8s Pod 또는 소형 VM 환경에서도 병목 없이 안정적으로 분산 스케줄링을 수행합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: Custom RDBMS Engine (Selected) | Design Approach 2: Heavyweight IMDG (Hazelcast) |
 | :--- | :---: | :---: |
 | 자원 효율성 (`QAS-07`, `NR-05`) | **【매우 우수】**<br>JVM Heap < 50MB, CPU 오버헤드 50% 이상 절감 | **【부적합】**<br>노드당 수백 MB 메모리 및 지속적 CPU 점유 |
@@ -1469,8 +1462,10 @@ Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine (자체 경량�
 
 
 
+###4.1.9 DD-09 Backward Compatibility
 
 
+#### 4.1.9.1 Design Goal
 
 ### 4.1.9.1 Design Goal
 
@@ -1481,27 +1476,27 @@ Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine (자체 경량�
 
 
 
+####4.1.9.2 Design Approaches
 
 
+##### 4.1.9.2.1 Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 
-### 4.1.9.2.1 Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
-
-#### 개요
+**개요**
 어댑터 패턴(Adapter Pattern) 및 스키마 호환 뷰/확장 레이어를 도입하여, 기존 배치 애플리케이션 개발자가 소스 코드를 단 한 줄도 수정하지 않고 라이브러리 교체만으로 신규 분산 엔진을 적용받도록 설계하는 방식입니다.
 
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Interface Wrapper / Adapter:** 기존 스케줄러 인터페이스(`BatchJobScheduler`)를 감싸는 호환 어댑터를 제공하여 호출부를 그대로 보존.
 - **Non-destructive Schema Extension:** 기존 DB 메타테이블의 칼럼을 삭제하거나 이름을 변경하지 않고, 필수 제어 칼럼만 `ALTER TABLE ... ADD` 방식으로 추가하거나 별도 클러스터 테이블 신설.
 
-#### 장점
+**장점**
 - 기존 업무 애플리케이션 마이그레이션 비용이 없음 (`NR-03`, `BG-03`).
 - 엔진 교체 시 리스크 최소화 및 즉시 원복(Rollback) 가능.
 
-#### 단점
+**단점**
 - **어댑터 레이어 유지보수 및 래핑 클래스 오버헤드:** 레거시 인터페이스와 신규 엔진 간의 호환 어댑터 클래스 관리 공수가 추가됨.
 - **DB 스키마 변경 시 충돌 및 마이그레이션 검증 부담:** 레거시 DB 테이블과 신규 컬럼 간의 스키마 호환성 검증 소모.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **어댑터 레이어 유지보수 및 래핑 오버헤드 약점 → DD-06 (엔진 배포 구조) 연계 보완:**
   - 기존 인터페이스를 감싸는 어댑터 클래스 관리가 추가되는 약점은 `DD-06` Embedded Library Pattern 대안으로 보완합니다. 어댑터 모듈을 JAR 런타임 내부에 캡슐화(Encapsulation)하여 배치 애플리케이션 개발자의 수정 공수를 방지합니다.
 - **DB 스키마 마이그레이션 리스크 → DD-05 (공유 영속 저장소) 연계 보완:**
@@ -1509,20 +1504,20 @@ Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine (자체 경량�
 
 
 
-### 4.1.9.2.2 Design Approach 2 - Breaking API Redesign and Schema Migration
+##### 4.1.9.2.2 Design Approach 2 - Breaking API Redesign and Schema Migration
 
-#### 개요
+**개요**
 기존 배치 인터페이스 및 메타 DB 스키마를 전면 재설계(Breaking Change)하여 신규 분산 엔진 전용 API와 테이블 스킴을 적용하는 방식입니다.
 
-#### 특징 및 메커니즘
+**특징 및 메커니즘**
 - **Clean Slate Redesign:** 하위 호환 레거시 코드를 제거하고 독립적인 클래스/인터페이스 설계.
 - **Mandatory Application Code Refactoring:** 모든 기존 배치 서비스의 자바 소스 코드 및 SQL 쿼리를 대대적으로 수정/재컴파일해야 함.
 
-#### 단점
+**단점**
 - 기존 배치 업무 개발자들의 코드 리팩토링 공수 및 전면 마이그레이션 결함 리스크 발생 (`NR-03`, `BG-03` 위반).
 - 기존 메타 DB 스키마 파괴적 변경(Breaking Change)으로 인한 운영 장애 및 호환성 유실 위험.
 
-#### 타 Design Decision 연계를 통한 단점 보완 방안
+**타 Design Decision 연계를 통한 단점 보완 방안**
 - **전면 리팩토링 및 마이그레이션 결함 리스크 → DD-09 Approach 1 (Interface Adapter) 연계 보완 필요성:**
   - 기존 애플리케이션 코드를 전면 수정/재컴파일해야 하는 마이그레이션 리스크(`NR-03`, `BG-03` 위반)는 `DD-09` Approach 1(Interface Adapter) 대안을 전면에 배치하여 호환 레이어를 두지 않는 한 보완이 불가능합니다.
 - **기존 메타 DB 스키마 파괴적 변경 파급 → DD-05 (공유 영속 저장소) 연계 보완 시도 및 한계:**
@@ -1530,18 +1525,18 @@ Design Approach 1 - Lightweight Custom RDBMS Coordinator Engine (자체 경량�
 
 
 
-### 4.1.9.3 Design Decision and Rationale
+#### 4.1.9.3 Design Decision and Rationale
 
-#### 선정
+**선정**
 Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer (인터페이스 어댑터 및 메타테이블 하위 호환성 보장 레이어)
 
-#### 선정근거
+**선정근거**
 * **기존 업무 서비스 소스 수정 배제 및 배포 환경 보존:**
   * 어댑터 패턴을 내재화하여 기존 배치 서비스 프로그램 및 K8s Pod 실행 환경의 구조 변경 없이 신규 분산 엔진을 투명하게 교체/도입할 수 있습니다 (`NR-03`, `NR-09`, `CR-02`, `BG-03`).
 * **DB 마이그레이션 및 인프라 수정 리스크 차단:**
   * 메타 DB 스키마 및 K8s 배포 매니페스트의 파괴적 변경(Breaking Change)을 금지하고 비파괴적 확장 방식으로 구성하여 기존 배치 시스템 정합성 및 배포 호환성을 유지합니다.
 
-#### 비교 평가 매트릭스
+**비교 평가 매트릭스**
 | 평가 항목 | Design Approach 1: Adapter & Backward Compatibility (Selected) | Design Approach 2: Breaking Redesign & Migration |
 | :--- | :---: | :---: |
 | 애플리케이션 코드 및 배포 호환성 (`NR-03`, `NR-09`, `CR-02`) | **【우수】**<br>소스 코드 및 K8s 환경 변경 0건으로 투명 교체 | **【부적합】**<br>모든 배치 서비스 코드 및 배포 매니페스트 수정/재검증 필요 |
@@ -1550,18 +1545,18 @@ Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 
 
 
-
+##4.2 SW Stack
 
 
 ### 4.2.1 Technology Stack
 
-#### 1. Core Runtime & Language
+**1. Core Runtime & Language**
 - **Java Development Kit (JDK):** OpenJDK 17 LTS (Spring Boot 3.x와의 상위 호환성 및 사내 인프라 배포 범용성 준수)
 - **Standard Java API:** 
   - `java.util.concurrent`: 동시성 제어, 임대 타이머 및 스레드 풀 관리 (`DD-01`, `DD-02`, `DD-08`)
   - `java.sql` 및 `javax.sql`: 공통 RDBMS JDBC 트랜잭션 및 메타테이블 바인딩 (`DD-03`, `DD-04`, `DD-05`)
 
-#### 2. 핵심 분산 기능 구현 기술 및 전략
+**2. 핵심 분산 기능 구현 기술 및 전략**
 - **클러스터 멤버십 및 리더 선출 (Leader Election - DD-01):**
   - 메타 RDBMS 공유 테이블 기반 합의 트랜잭션 기법 적용. 노드 간 직접 소켓 포트 비개방(Non-P2P Port Open) 구조로 보안 규정 만족 (`QAS-03`, `QAS-04`, `QAS-05`).
 - **분산 락 (Distributed Lock - DD-02):**
@@ -1581,15 +1576,17 @@ Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 - **하위 호환성 보장 레이어 (Backward Compatibility - DD-09):**
   - Interface Adapter 패턴 및 비파괴적 메타 DB 스키마 확장 레이어를 탑재하여 기존 배치 서비스 코드, SQL 쿼리 및 실행 환경 변경 0건 달성 (`NR-03`, `NR-09`, `CR-02`, `BG-03`).
 
-#### 3. Build & Infrastructure
+**3. Build & Infrastructure**
 - **Build Tool:** Gradle (Java 17 표준 빌드 환경 지원 및 멀티 모듈 의존성 제어)
 - **Database Connection Pool:** HikariCP (Spring Boot 3.x 기본 커넥션 풀 빌트인 스펙 활용)
 - **Zero External Dependencies:** Redis, Zookeeper 등 외부 타사 분산 코디네이터 연계 모듈 전면 배제. 순수 자바 컴파일 및 범용 JDBC 클라이언트 드라이버 의존성만 허용.
 
 
 
+#5. Detailed Design
 
 
+## 5.1 Conceptual Architecture
 
 ### 5.1.1 설계 전략 적용범위
 | No.   | DD 명 | 채택 설계 | 설명  |
@@ -1603,16 +1600,22 @@ Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 | DD-07 |      |       |     |
 
 
+## 5.2 Module View
+
 ### Package Diagram
 ### Class Diagram
 
 
+
+## 5.3 Run-time View
 
 ### 5.3.1 Component & Connector View
 
 ### 5.3.2 Senario View
 
 
+
+## 5.4 Deployment View
 
 ### 5.4.1 Allocation Diagram
 
@@ -1621,26 +1624,38 @@ Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 
 
 
+#6. Architecture Evaluation
+
+
+## 6.1 Traceability Summary
 
 
 
 
+## 6.2 아키텍처 설계 결정표
 
 
 
 
+## 6.3 요구사항 관점의 분석
 
 
 
 
+## 6.4 민감점과 상충점
 
 
 
 
+## 6.5 위험 요인
 
 
 
 
+#7. Architecture Implementation and Verification
+
+
+## 7.1 Verification Strategy
 
 본 아키텍처 정의서에 따라 구현된 분산 배치 엔진(BatchService)의 기술적 목표(외부 라이브러리 없는 분산 락, 분산 큐 및 자가 치유 기능)가 충족되었는지 검증하기 위한 전략입니다.
 
@@ -1660,6 +1675,8 @@ Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 3. **통합 테스트 (Integration Test):** 이중화 및 다중화 환경(최소 3개 노드)을 구성하여 실제 배치 작업 스케줄링 흐름 검증
 
 
+
+## 7.2 Test Cases
 
 분산 배치 엔진의 기능 및 비기능적 아키텍처 요구사항을 검증하기 위한 구체적인 테스트 시나리오 정의서입니다.
 
@@ -1682,6 +1699,8 @@ Design Approach 1 - Interface Adapter and Metatable Backward Compatibility Layer
 | TC-DQ-02 | **작업 중단 시 재처리 (At-least-once)**<br>- 작업 처리 중 노드 장애로 비정상 종료 | - 큐에서 태스크가 영구 유실되지 않고 타 노드에 의해 재수행됨 | 대기 |
 
 
+
+# 8. 현장 활용 계획
 
 ## 8.1 현장 활용 효과
 
