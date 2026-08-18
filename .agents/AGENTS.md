@@ -1,5 +1,7 @@
 # Project Rules
 
+## 본 프로젝트는 Obsidian으로 작성되었습니다. 그림 삽입과 링크에 Obsidian 스타일을 사용했음을 명심해주세요.
+
 ## Documentation and Response Style Guidelines
 
 - **LLM 특유의 과장된 표현 사용 금지**
@@ -10,7 +12,7 @@
 
 ## 방법론
 - 선행 챕터의 분석 결과로 후행 챕터를 작성합니다.
-- QAS가 DD를 결정합니다. DD(아키텍처 설계 및 구현기술)에 대한 내용은 QAS에 미리 나올 수 없습니다.
+- QAS는 특정 아키텍처나 기술을 전제하면 안됩니다. 
 
 ## 분석 방법
 - 추적성을 분석하면서 .py, .js을 작성하지 마세요. powershell도 가급적 사용하지 마세요. 프로그램을 작성해서 분석하는 것이 너무 오래 걸리고 토큰만 낭비하는 것 같습니다. 
@@ -28,3 +30,13 @@
 
 ## Meraid 스크립트 작성 시
 - ""로 내용을 반드시 감싸주세요.
+
+## C&C View
+- C&C View는 drawio xml로 작성해주세요. 복사해서 drawio에 붙여넣기 하겠습니다.
+- 둥근모서리를 사용하지 마세요. 사각형 모서리를 사용하세요. 
+- shape의 모양과 색상은 범례에 그 의미가 표시되어야합니다.
+- 선의 모양과 색상은 범례에 그 의미가 표시되어야합니다.
+- 단지 예쁘게 보이기 위한 색상은 사용하지 마세요.
+
+## Sequence Diagram
+- Sequence diagram은 sequencediagram.org 스크립트로 작성해주세요. 복사해서 sequencediagram.org에 붙여넣기 하겠습니다.
