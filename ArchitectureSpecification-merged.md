@@ -20,9 +20,12 @@ SDS가 수행하는 대내외 프로젝트에 무상으로 제공되는 Batch Jo
   다중 인스턴스가 동일한 스케줄 주기에 도래한 작업을 동시에 기동할 경우 중복 실행(Duplicate Execution)이나 특정 노드로의 부하 집중이 발생할 수 있습니다. 이를 방지하기 위해 실행 대상 작업을 분산 큐에 등록(Enqueue)하고, 각 인스턴스가 가용 자원에 맞춰 작업을 경쟁적으로 인출(Dequeue/Fetch)하여 처리함으로써 노드 간 작업 부하를 균등하게 분산하고 중복 기동을 억제합니다.
 - **스케줄링과 작업 실행 간의 결합도 완화 (Decoupling & Buffering)**:
   작업 트리거(스케줄링 판단)와 실제 작업 실행(Job Launching)을 분산 큐를 매개로 비동기 분리(Decoupling)합니다. 다량의 배치 작업이 일시에 트리거되더라도 분산 큐를 통한 버퍼링으로 개별 인스턴스의 리소스 급증을 완화하며, 특정 노드 장애 시에도 큐에 대기 중인 작업을 생존 노드가 인계하여 처리할 수 있는 구조를 제공합니다.
+
 ![[ArchitectureSpecification/1. Project Overview/Untitled Diagram 1.svg]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEAhEEYAtkCkB7AI2QGdcBTAEwFcAbSsZAJUuHthGQGIBGVMhBlkAEQCCAcT4AoGaEix4IJGkzY8RUhRw0GTVu04xuPAEyDhYqWbkLocRClSioZCGCjFaESsgCKtJRBliL+vMBQCADWduAOykgA5mCEtMDIAKIAHpQwPlCECFkIAG5QqQgAtpRI8vFKTmpYuAQkvAJCIuiy9o0qzuqtWrwWXcjotn2OA80abaQ8AMyhE0sytdRyMiAw0KVYfhLScsd8ALQAfJcAVD0AXPQgtAitAFbt-Dt7UAe+E7JqJRdvtDiAAGa+Zg9GRA9ypACeEKhAJ29BQCEo2RQ7nYyA+pEAJ0OASNXkIAAGsApU2AA1XkIBemsADWMyM7nADaPDANAA3GYALqXfz3YC0Mh4THY-HtAAUBNGABoJYslgBKb6g-7+WHAn5-YGQgwazbbIEg35gvXMM4yMigGCUVWm-7HWxMmys9lc3n8+7gyjzGXme06gKak065H606u653MyPZ6vPD+2yhw4TWzG7VmlGTTXwwhI81puQgdHIMU43wZGUk8nUumMp1XAVCkVlrEoGXSz4AFhVKfVIczvnDzANCC2GbVupRTu21t2dv7RyksmZbI51G5fIFPr9n3WS+Dk4d04jzOj6CWcZe733gdTl8HU5Ha1zHnzL8faIx7fIlYVyA1pSNIMi60hNoKwqir+nb+r294DseYaFmOWxyEAA)
 ![[Pasted image 20260818040545.png]]
+
 #### AS-IS 아키텍처의 분산 락 활용 배경 (DAG 상태 전이 동기화)
 다중 인스턴스(Replica # 1, Replica # 2) 환경에서 DAG(Directed Acyclic Graph) 기반 워크플로우가 분산 실행될 때, 선행 작업들의 완료 처리와 후속 작업(Job # 4)의 기동 조건 판정 과정에서 분산 락을 통한 동기화가 필요합니다.
 
@@ -30,9 +33,12 @@ SDS가 수행하는 대내외 프로젝트에 무상으로 제공되는 Batch Jo
   복수의 선행 작업(Job # 2, Job # 3)이 서로 다른 인스턴스에서 거의 동시에 완료될 때, 적절한 동기화 제어가 없으면 각 인스턴스가 상대방의 작업 완료 상태가 최종 반영되기 전에 후속 작업(Job # 4)의 실행 조건을 조회하게 됩니다. 이 경우 'Replica # 1'과 'Replica # 2' 모두 "선행 조건 미충족"으로 잘못 판정(False Negative)하여, 'Job # 2'와 'Job # 3'가 모두 완료되었음에도 후속 작업(Job # 4)이 트리거되지 않고 워크플로우가 영구 정체(Starvation)되는 결함이 발생할 수 있습니다.
 - **분산 락을 통한 상태 전이 원자성(Atomicity) 확보**:
   선행 작업의 완료 상태 반영, 전체 선행 조건 충족 여부 검토, 후속 작업 기동(트리거)에 이르는 일련의 상태 전이 로직을 분산 락 기반의 **Critical Section** 으로 직렬화(Mutual Exclusion)합니다. 이를 통해 다중 노드 환경에서도 최신 완료 상태에 기반한 정확한 판정을 보장하여 후속 작업의 누락 없는 안전한 기동을 달성합니다.
+
 ![[ArchitectureSpecification/1. Project Overview/Untitled Diagram.svg]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEAhEEYAtkCkB7AI2QGdcBTAEwFcAbSsZAJUuHthGQGIBGVMhBlkAEQCCAcT4AoGaEix4IJGkzY8RUhRw0GTVu04xuPAEyDhYqWbkLocRClSioZCGCjFaESsgAyhDAA1pYigSG8wFAIwfLgDsqqLm4eXj5+AIq0lDlhyJlRMXHUWCDEwn4uUsgA6oRgwQBm9IQA7siAgwOAOwv5bXYJSk4A5mCEtMDIAKIAHpQwPlCECNMIAG5QYwgAtpRI8YqOKs7quAQkvBZCIui29kPHalhnWrwAzPnobzJ71HIyIBg0DWWD8Ekkthk4LMAFoAHyZABcTUoGmQACsSACgVAQb4CjJqJRAcDQSAmr5mJk5ND4XCAFS3RH0EC0BBnTHEKE2eFMtrPPCc7Gk-G3QnEnF44kUgxionuMYAT3JlOQYu5EPhEWCiO1yEAsWuAXZbhbjQQEgiUJSLpartTIYJ4HCB6LwmiiiX9aQBtHhgGgAbjMAF04W1EeDkG0Gs1Wh0eshAA4TgBi15AACkAAwvIQAe44ASocALIs55CARPHAKOjgBaGwCVYwBKE1SyPikmm3wqgz9Wlw6GIhCUGYodzsDEXQAnQ4BI1eQgAAawClTchAJPL44B9BQ3d75F8k05yFHE8ngANV5CAXprAA1jGthPr91EDIbDEajjRa7S63WQgEYawAHQ7Wzf0iY2pS3mG2eQRRFgFoMg8GXFAhR-M1qW-SUyRlKkfgQP5fhPLULV1C1kEAF1XABwJj98TtODrT-c0QgbeDm0Q6wITkaD8XBWQaSkPh4SRFE0Sgqisko0iaOpJi6UZN5mVZdlBSxIS4S+RF+S4rEGL8L4+KbG1ZW+eUPEIZUaJUjU2LhbUsJCI1CL8YirTUsi7QdKAnRdHg3RoGgDJhM8A2DUNwxqW8YwfeNkzTTNcwLYty2rcz6xI6yaIA6R4SYrsez7NdB1ILcp1nednSXFLVwHDdMt3A9jyEjyLy869fOje84yfN8oq-KzfzitygJAsDkAg9KotglqENVak0LQliEqMzDtXwqLLKUmyLSAA)
 ![[Pasted image 20260818033215.png]]
+
 #### 참고: 기존 배치 스케줄링 플랫폼 대비 재사용자산 BatchService의 차별성
 널리 쓰이는 기존 배치 스케줄링 플랫폼(Apache Airflow, Kubernetes CronJob 등) 대신 사내 재사용자산 BatchService를 직접 개편하는 이유는 다음과 같은 장점 때문입니다.
 
@@ -43,6 +49,7 @@ SDS가 수행하는 대내외 프로젝트에 무상으로 제공되는 Batch Jo
 * **Kubernetes CronJob 대비 정교한 제어 및 하이브리드 지원**:
   * Kubernetes CronJob은 클라우드 환경 전용 기술로서 단순히 지정 주기에 컨테이너 Pod를 기동(Launch)할 뿐, 작업 간의 정교한 선후행 의존 관계(Chaining) 관리, 동작 중인 배치의 실시간 강제 종료/수동 재기동 등 정밀 제어 API를 제공하지 않으며 레거시 가상 머신(VM) 실행 환경을 연동할 수 없습니다.
   * BatchService는 단일 스케줄러 클러스터 내에서 K8s 컨테이너 Pod 기동뿐 아니라 레거시 VM 내부의 쉘 스크립트 실행 제어까지 통합적으로 조율하고 모니터링할 수 있는 하이브리드 아키텍처를 제공합니다.
+
 ### 목표  
 
 #### 아키텍처 개선 범위 (Architecture Scope)
@@ -123,17 +130,26 @@ Hazelcast 의존성을 배제하고, 기존의 분산 클러스터링 및 동시
 | NR-08  | 기존 배포 인프라 및 아키텍처 호환성      | 이식성 | 경량 분산 코디네이션 엔진 도입 시 수요처 프로젝트의 기존 K8s Pod 실행 환경, 배포 매니페스트 및 아키텍처 구조의 변경을 최소화함.                                                                                          |  하   |    SF-01 ~ SF-05    |
 | NR-09  | DB 장애 내구성 (분산 락·큐 무중단 운영) | 가용성 | 메타 DB 인프라에 장애가 발생하여 DB 접속이 불가한 상태에서도 분산 락(Distributed Lock) 및 분산 큐(Distributed Queue)의 핵심 기능이 중단 없이 동작하여야 하며, DB가 복구된 시점에 클러스터 상태 및 작업 이력을 RDBMS와 정합하여 전체 시스템을 정상 복구함. |  상   |    SF-01 ~ SF-05    |
 
+
+
 ## 1.5 Business context Diagram
 
 BatchService의 비즈니스 영역 경계와 외부 행위자/시스템 간의 관계를 다이어그램으로 나타냅니다.
 ![[Pasted image 20260615001919.png]]
 
+
+
+
 # 2. System Overview
+
 
 ## 2.1 System Context Diagram
 
 BatchService를 중심으로 상호작용하는 외부 시스템 및 운영자와의 관계를 시스템 관점에서 정의합니다.
 ![[Pasted image 20260615002015.png]]
+
+
+
 
 ## 2.2 External Entity List
 
@@ -520,15 +536,15 @@ BatchService 아키텍처 설계 및 구현 과정에서 반드시 준수해야 
 
 **4.1.0.1 Design Decision 목록**
 
-| ID    | 주제                          | Decision이 필요한 사유                                                                                                                                                                                                    | 관련 Requirement / Feature / QAS / 제약                        |
-| ----- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| DD-01 | 리더 선출 및 멤버십 관리 방안           | 스플릿 브레인을 방지(QAS-03)하면서, 일반 노드 장애 시 3초 이내 멤버십 자가 치유(SF-01, FR-04, QAS-04), 리더 장애 시 3초 이내 신규 리더 선출(SF-05, QAS-05), 그리고 메타 DB 장애 중에도 단일 리더 선출 및 멤버십 상태를 안정적으로 유지(NR-09, QAS-09)하기 위한 합의 알고리즘 및 동기화 메커니즘을 결정해야 함.       | SF-01, SF-05, FR-04, QAS-03, QAS-04, QAS-05, NR-09, QAS-09 |
-| DD-02 | 분산 락 구현 방안                  | 다중 노드 동시 요청 시 배치 작업의 원자적 상태 정합성을 보장(SF-02, FR-01, QAS-01)하고, 교착 상태(Deadlock) 등 동시성 결함을 배제(NR-02)하며, 메타 DB 장애 중에도 분산 상호 배제를 유지(NR-09, QAS-09)하기 위한 동시성 제어 및 락 생명주기 관리 메커니즘을 결정해야 함.                                  | SF-02, FR-01, NR-02, QAS-01, NR-09, QAS-09                 |
-| DD-03 | 분산 큐 구현 방안                  | 대기열 작업의 유실·누락 없는 순차 처리를 보장(SF-03, FR-02)하면서, 피크 타임 대규모 경합 상황에서도 0.5초 이내 인출 성능(QAS-02)을 충족하고, 메타 DB 장애 중에도 큐 인출·적재가 무중단으로 동작(NR-09, QAS-09)하기 위한 분산 큐 아키텍처 및 작업 분배 방식을 결정해야 함.                                       | SF-03, FR-02, QAS-02, NR-09, QAS-09                        |
-| DD-04 | 장애 저널 복구 전략                 | 스케줄러 노드 비정상 종료(Crash) 시 미완료 태스크를 누락 없이 10초 이내에 자동 복구 및 재스케줄링(SF-04, FR-03, QAS-06)하고, 메타 DB 장애 중에도 작업 실행 이력을 보존하며 DB 복구 후 데이터 정합성을 복원(NR-09, QAS-09)하기 위한 저널링 구조 및 상태 복원 절차를 결정해야 함.                                | SF-04, FR-03, QAS-06, NR-09, QAS-09                        |
-| DD-05 | 분산 합의용 영속 저장소 방식 결정         | 유료 라이선스를 배제(CR-01, NR-01)하고 외부 미들웨어 설치 없이(CR-02, NR-03, QAS-08), 메타 DB 장애 중에도 분산 합의 및 동시성 제어 상태를 안전하게 영속화하고 DB 복구 후 데이터 정합성을 복원(NR-09, QAS-09)하기 위한 영속 저장소 아키텍처 및 동기화 전략을 결정해야 함.                                   | CR-01, CR-02, NR-01, NR-03, NR-09, QAS-08, QAS-09          |
-| DD-06 | 분산 코디네이터 엔진 배포 구조 결정        | 별도 미들웨어 없는 자동 배포(NR-03, QAS-08)와 플랫폼 독립성(NR-07)을 만족하며, 노드당 자원 점유를 최소화(NR-06, QAS-07)하고 기존 API 및 인프라 호환성(NR-05, NR-08, CR-02)을 유지하기 위해 분산 코디네이터 엔진의 패키징 및 결합 구조를 결정해야 함.                                             | CR-02, NR-03, NR-05, NR-06, NR-07, NR-08, QAS-07, QAS-08   |
-| DD-07 | K8s 복제본(Replica) 관리 컨트롤러 결정 | 기존 K8s 배포 환경 호환성을 유지(CR-02, NR-08)하면서, 노드 장애 감지 시 3초 이내의 자동 장애 복구 및 순차적 롤링 배포(NR-04, QAS-04, QAS-05)를 지원하고, **노드 간 직접 통신 및 영속 상태 유지를 위한 안정적인 네트워크 식별성과 스토리지 접근성을 보장(NR-09, QAS-09)**하기 위한 K8s 워크로드 컨트롤러 유형을 결정해야 함. | CR-02, NR-04, NR-08, QAS-04, QAS-05, NR-09, QAS-09         |
+| ID    | 주제                          | Decision이 필요한 사유                                                                                                                                                                                                | 관련 Requirement / Feature / QAS / 제약                        |
+| ----- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| DD-01 | 리더 선출 및 멤버십 관리 방안           | 스플릿 브레인을 방지(QAS-03)하면서, 일반 노드 장애 시 3초 이내 멤버십 자가 치유(SF-01, FR-04, QAS-04), 리더 장애 시 3초 이내 신규 리더 선출(SF-05, QAS-05), 그리고 메타 DB 장애 중에도 단일 리더 선출 및 멤버십 상태를 안정적으로 유지(NR-09, QAS-09)하기 위한 합의 알고리즘 및 동기화 메커니즘을 결정해야 함.   | SF-01, SF-05, FR-04, QAS-03, QAS-04, QAS-05, NR-09, QAS-09 |
+| DD-02 | 분산 락 구현 방안                  | 다중 노드 동시 요청 시 배치 작업의 원자적 상태 정합성을 보장(SF-02, FR-01, QAS-01)하고, 교착 상태(Deadlock) 등 동시성 결함을 배제(NR-02)하며, 메타 DB 장애 중에도 분산 상호 배제를 유지(NR-09, QAS-09)하기 위한 동시성 제어 및 락 생명주기 관리 메커니즘을 결정해야 함.                              | SF-02, FR-01, NR-02, QAS-01, NR-09, QAS-09                 |
+| DD-03 | 분산 큐 구현 방안                  | 대기열 작업의 유실·누락 없는 순차 처리를 보장(SF-03, FR-02)하면서, 피크 타임 대규모 경합 상황에서도 0.5초 이내 인출 성능(QAS-02)을 충족하고, 메타 DB 장애 중에도 큐 인출·적재가 무중단으로 동작(NR-09, QAS-09)하기 위한 분산 큐 아키텍처 및 작업 분배 방식을 결정해야 함.                                   | SF-03, FR-02, QAS-02, NR-09, QAS-09                        |
+| DD-04 | 장애 저널 복구 전략                 | 스케줄러 노드 비정상 종료(Crash) 시 미완료 태스크를 누락 없이 10초 이내에 자동 복구 및 재스케줄링(SF-04, FR-03, QAS-06)하고, 메타 DB 장애 중에도 작업 실행 이력을 보존하며 DB 복구 후 데이터 정합성을 복원(NR-09, QAS-09)하기 위한 저널링 구조 및 상태 복원 절차를 결정해야 함.                            | SF-04, FR-03, QAS-06, NR-09, QAS-09                        |
+| DD-05 | 분산 합의용 영속 저장소 방식 결정         | 유료 라이선스를 배제(CR-01, NR-01)하고 외부 미들웨어 설치 없이(CR-02, NR-03, QAS-08), 메타 DB 장애 중에도 분산 합의 및 동시성 제어 상태를 안전하게 영속화하고 DB 복구 후 데이터 정합성을 복원(NR-09, QAS-09)하기 위한 영속 저장소 아키텍처 및 동기화 전략을 결정해야 함.                               | CR-01, CR-02, NR-01, NR-03, NR-09, QAS-08, QAS-09          |
+| DD-06 | 분산 코디네이터 엔진 배포 구조 결정        | 별도 미들웨어 없는 자동 배포(NR-03, QAS-08)와 플랫폼 독립성(NR-07)을 만족하며, 노드당 자원 점유를 최소화(NR-06, QAS-07)하고 기존 API 및 인프라 호환성(NR-05, NR-08, CR-02)을 유지하기 위해 분산 코디네이터 엔진의 패키징 및 결합 구조를 결정해야 함.                                         | CR-02, NR-03, NR-05, NR-06, NR-07, NR-08, QAS-07, QAS-08   |
+| DD-07 | K8s 복제본(Replica) 관리 컨트롤러 결정 | 기존 K8s 배포 환경 호환성을 유지(CR-02, NR-08)하면서, 노드 장애 감지 시 3초 이내의 자동 장애 복구 및 순차적 롤링 배포(NR-04, QAS-04, QAS-05)를 지원하고, 노드 간 직접 통신 및 영속 상태 유지를 위한 안정적인 네트워크 식별성과 스토리지 접근성을 보장(NR-09, QAS-09)하기 위한 K8s 워크로드 컨트롤러 유형을 결정해야 함. | CR-02, NR-04, NR-08, QAS-04, QAS-05, NR-09, QAS-09         |
 
 **4.1.0.2 QAS ↔ DD 매핑 추적 매트릭스 (Traceability Matrix)**
 모든 품질 속성 시나리오(QAS)가 최소 하나 이상의 Design Decision에 의해 대응됨을 검증합니다.
@@ -759,6 +775,7 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
 
 **개요**
 데이터베이스의 물리 세션 커넥션을 유지한 채 특정 배치 키에 해당하는 Row를 `SELECT ... FOR UPDATE` 구문으로 조회하여, 데이터베이스 트랜잭션 락 세션이 점유 중일 때 타 노드의 접근을 차단합니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.2 DD-02 Distributed Lock/4.1.2.2 Design Approaches/Untitled Diagram.svg]]
 
 **특징 및 메커니즘**
@@ -784,6 +801,7 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
 
 **개요**
 메타 RDBMS의 전용 락 테이블에 특정 배치의 점유 정보(`OWNER`, `EXPIRE_AT`)를 기록하여 논리적으로 분산 락을 표현합니다. 락을 가져올 때는 단 한 번의 단기 트랜잭션(UPDATE 쿼리 경쟁)만 수행하고 즉시 DB 커넥션을 반환합니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.2 DD-02 Distributed Lock/4.1.2.2 Design Approaches/Untitled Diagram 1.svg]]
 
 **특징 및 메커니즘**
@@ -810,11 +828,14 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
 
 **개요**
 `DD-01(Socket P2P Raft 프로토콜)`과 연계하여, 선출된 리더 노드가 JVM 메모리 상에 Raft FSM(Finite State Machine) 기반 분산 락 상태를 관리합니다. 각 워커 노드는 배치를 실행하기 전 Raft 채널(리더-팔로워 TCP 통신)을 통해 락 획득을 요청하며, 리더가 Raft Log에 락 상태 변경을 기록하고 Quorum 복제 완료 후 응답합니다.
+
 ![[Pasted image 20260818113305.png]]
 
 **분산 락 획득 (Lock Acquire) 및 Quorum 합의 단계**
+
 [원본링크](https://sequencediagram.org/index.html#initialData=FABwhgTgLglgxjcA7KBzCB7AriABAOQwBMBTXAQVwAoBhAGxhJQHoAxDOujAdxIgEpQkWAmRRcAIkKkKALgA6SAEJgocABa4AUhgBGuAKIAPEnCxQMECbjABnCgH0duodHiIwKSdLLkFSABkMOABrXHpGFGs7RwimKFcRDy8pYl9qdk4ePn5-ACUwADNxGgwkWyZbLHsDJFQYJBJo+3IHWvrGxPcxbzSKDI4uXgF-INDcVgBlAFlmxynp4CYiYC7RTzRMHAI+pWoAkjBSATXk8VSZPaoDo5z8opKyivLqwzqGppt7JTb3zvA3OsUj5cFcbsdcooxmEFnMfgslkgVqcxOhsHgQTQBllhoIAUkehcyFiqJkhndFAViuEnpVXu0PnMaL8OiQURtejISWTsiMocEYTMmQ4EctVsBWs4ALQAPlacRQshscAAjlgYBASNCqFxQgBpEgATwANLg6IcKgAVS0BQRgOCwABuql8DgVCQlboY8VlPwZjSVlpoAAVcHlgzQlXkSGqSLYoNDyKr1ZqqEg0gBJIgAXiJ5Akpt1IQNJrNFpI1ttwHtTpdoJZH1Wfr+JF9IpmSo0phC5GdMDoYF0-ZgUENOoFJbtDpgzqgZHhM2AC+mUrb-pISvIADVyBmAuQlAEDMBSDWZ3Xl6sAWGHmGSCAGHBVDAykrwXxcBYJoNeRRgLgAPrddZVaddAxDMMI03EAQGWWooAgRhbCoS0+AAW1NeDELjbMAG0AgAeRoPUHHIGgAEUAFUMzyAwAF1TVKNC0JHDMkRIIxBEA5VaznRx13-QDQJbVcZWbVloNgpEsKQ6NbBAWkqEmLA4DgONbGzBCsBILjANPadZ1dASSDoCob2paMH3gZ9X1wd8IE-DBvxxD8aEEgDxI+WVmTA3Ag1DcNIwoGC4JQbDkNQiAMLeBCkLwwjiNIijqNohiaWY1j2M49yePPPifJbHKCtZUTPIDYKpKIGS4zkhTyhIJSVLU2wNK0nScv03jiQbToxWAdM+IwR0PzKjdcHIrBLCwNCqEAH5rAAwewAMIdwAAmZgAGZ+FwQBLVcADXHcEAETHABmO3BZVwOAMAyqA2NIIxcEARhrAAOhpsetbMT22mJUwBgugx0TZMNRIJi0M8Igpy6+sEWXNsFiVEBzHHfUjVNRQAG8eEaCAlTzAtFFwDiQEB8goCVdNuAAakrY08cKJg1MtDAQiYQMAEYAF9BGhtcW0k70iCoWmkHpxmmGzS0WcETq8vnD6XuAkCvUiEm-IgwK73k2k3wFABxCANhIfnBeFpmkDFlnC3LAARLA9dgMpJcOAyL1e1Z5W9FBRMlPQtdCJM1UBw26YrEXTfFh2z0M2J3Y9IA)
 ![[Pasted image 20260818112419.png]]
+
 1. **락 획득 요청 전달 (`acquireLock`):**
     - `Node A: Batch Job Executor`는 특정 배치 키에 대한 배타적 실행 권한을 얻기 위해 로컬의 `Node A: Lock Client` 모듈을 호출합니다.
     - `Node A: Lock Client`는 현재 선출된 활성 리더 노드의 주소를 식별하고, `Node B (Leader): Raft Consensus Engine`으로 TCP RPC인 `RequestLockAcquire(nodeId="NodeA", lockKey, leaseTTL)`를 전송합니다.
@@ -835,8 +856,10 @@ BatchService 핵심 클러스터링 엔진에서 다중 노드 기동 시 배치
     - 리더는 `Node A: Lock Client`에 `LockGranted(fenceToken=T1, leaseDuration)` 응답을 회신하고, 클라이언트는 `Node A: Batch Job Executor`에 락 획득 완료를 통보합니다.
 
 **팔로워 노드 Lock FSM 획득 상태 동기화 단계**
+
 [원본링크](https://sequencediagram.org/index.html#initialData=FABwhgTgLglgxjcA7KBzCB7AriABAOQwBMBTXAQVwAoBhAGxhJQHoAxDOujAdxIgEpQkWAmRRcAIkKkK1dpx59+ALgA6SAEpgAZuJoYkAZyaGsh3AFEkqGEhITcYc+QD6Vm3aHR4iMCknSZJRU8ly8AmpIADIYcADWuKwAygCyDk4ULskpwExEwF4ivijo2HiBuABC1FEkYKQChT5iAcRk1VS19UqRWrq4+kYmZpbWtvaO5pVuY57g3qJ+4lJtVTV1DSrqMfGJqelTWam5SPlNiyWYOASrNHIcYUrnxcsVdyEPihHqfXoGxkYRu5xgcBjMPCRni0VjJ3qEvltorEEtlQTQjjk8gUwHBYAA3MBQdrg8ZeXAACTq0AARnUoMx9ABbRkwcRJACeSDguCgGESn3CFGAuBFVRJdgAtAA+VzAuzKXAAFRoAAVcBoVTQFeQQCA8lYoBBGIYqJThLTCQAaAYYZmsgCSpxIAA9BKLHLiYASiZk5ZD3bLZiRpa5sgqwLq6OymSyoESiLRbbHHaRXcLRTj8YSghj0yLQ6kQxiFSAsFAqFx4gBpEjs63qADePDsEAVMJI5AklvUuBdIBgEA7UAVSB4AGpFYqot2kLhtEw4CRFRg4kwFYqAIwAXzdooLKQlRb92sjjHy7tIma92cy2TzvqDh6l02PFF1+pQRpIhg035A-xIKgkiwOBF0MQwAF5DSwEhdxFS9PW9HM-VyOhjApKkoAtekY1ZXAOS5Hk+XhQUaHvF9HyldFX2VNUNS1N89VOA0vxNM0aTpa1cKgFMXTgj0sx9aig3vYSIWldEw0cSNoyTVl40TO0eKdNN3SvJCwTvd1JMLKji1wUty0rOIazrRtmz4NtAk7Gde2dftB3IYdcFHbgJynWz5y5JcVzXJVt34nSDwk8USBPEAGBIc9RQQwSyCC0TQqfCiIXCj9DWNX9DH-IYgJAsDIOg2D71i68hNCk4ziAA)
 ![[Pasted image 20260818112251.png]]
+
 
 1. **커밋 인덱스 전파:**
     - 리더(`Node B`)는 주기적 Heartbeat 또는 후속 RPC 메시지에 갱신된 `CommitIndex`를 포함하여 팔로워 노드들에 전송합니다.
@@ -934,6 +957,7 @@ BatchService 핵심 클러스터링 엔진에서 **DAG Workflow**(Producer) 컴�
 
 **개요**
 **DAG Workflow**(Producer) 컴포넌트가 신규 배치 작업 메시지를 공통 RDBMS의 `BATCH_JOB_QUEUE` 테이블에 적재(Push, INSERT)하고, 다중 **Batch Launcher**(Worker Node) 인스턴스들이 주기적으로 DB 쿼리를 기동하여 대기열에서 작업을 인출(Pull, Dequeue)합니다. MySQL 8.0/MariaDB 10.6 이상에서 제공하는 `SKIP LOCKED` 구문을 동반한 비차단 인덱스 스캔을 활용하여 **하나의 작업 메시지를 단 하나의 Batch Launcher만 단일 수신**하도록 상호 배제 정합성을 보장합니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.3 DD-03 Distributed Queue/4.1.3.2 Design Approaches/Untitled Diagram 4.svg]]
 
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEARAggcWQdQHswBrAMwBsCB3AHQQAoAFMAgEwFcYBTMASlWQgAzsmZtOPAFChIseCCRp0AIWQAVEACNyXAFx1lmNQGEAEgH0AUgHll5gIoBVAKIuBw5CunhocRClRlEAgYAAtkABkQdgQwnmQAYgBGOnpMGGgANy5kAHpRAnJyKAQAc35BEUISHiTvWT8FAKCQ8KiYuLBEgCZU9Kyc-MZC4rKKj2riHm7633lFQOCwyOjY0PiEgGY+jKhsvIKikvL3KqIpsE3JSQQCCByCbK6xDm4wABpPZV1kAG0kgB0yAAkgA5ADKzgASmpkEx2EJwhohMReABdSQvCRgAC0AD4VD8wZCYSDQWprMhDCYLDY7E5XM5UkIIMEEQBeADkUOcmHQAE1OZ9QABPSggVjsgHS3iSEC7TLBHJeFQ4-FYt4-cGOYzGZzg8GSVhceVZJVfa63e7IR7xSa1T6Ev7dIGQiLOYyw6VAgBi1ihyEcjCwamcyHBAGlgYxItZjBHnOgMfawEl8U7wWpMKS1FDMBDMJ7gdZQQBuOhuj1e6X4UzQsMstlCLk8vmCugRYEAWWBsKSyD9AaDIbDkejsfjidLcoV5pTdVNe3NKuUarx85+vyh1ESSTRyEAHuOAHNnkIB4HuQgBE+wAAtYBACeQgF92+gADRxEQIMFRyEABIOABAmjSbZ2tLx-0XRVrXnG47geJ58HOaZHW+P5NldYh4Eid8plYZBtyoEQADJ0I-ZBQS4AAPFAcOTOCwG6dNEMzbNYVzfNwULNRizLCtnHdT1kG9Wt62QRsIA5bleQFTkO27XtkH7QdA2DIxRyjGMIjjBN0GnUC52omZtKA5RIOtW0uidHDd0AAXHkEAAvHAAqawAI8cAHnHAAHuwAdDroQAUPtcwBOheQQAx0cAF3HkEACmXABKh+gx0YXhkEAEbXsJ3BJum-P9VXxFNuk3czEv3Y8z0vW8H2fV8MOi38QMA5VDPKs1wN0ozoLtajNgQzcABYgWHJShNZETm25RxQVBMFsE5OF0C4ABHdguGm9FJBTTY6K1LMczzAsixLcsEErXj+LwOseW6psW3E9sEE7Hs+wHf0FJHcMVInDStIq2CakuGcasq+qbRgsyEqST4sqSsKIpU6KYroLLNmSyRUvXJrMoSzYcpPc9rzvR8XzfD9Sr-Y19K+76TNei5mq+H5ABjBwACccAGNrkEAVTXAFQJvLAA6lwAc9sAWvHAA1B5BAFCJwAZjvmpqlturrIVhYTRKhAahtBEb3joMAuCEHhslYcxgnZUFrDwehov2wSACsCE0cwoElTZns+i04YWn5rAjaqlwMoW3sWglEOMawu0u6d8ZehaiZgu34qoRJNkABdHkEAAGbAB1Vh9kEAF1XABwJ5keoRQAAGuwmXhoCtzkEAAYXkEAGbHABO55BAEQJwAf2uQQAI3oz2UgA)
@@ -1098,6 +1122,7 @@ BatchService 핵심 클러스터링 엔진에서 스케줄러 노드(리더 노�
 
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEAFMUC24CeyA6gPZgDWApmMgBQByxAJhcgMQCMAlKsiAM5F2AKCGhIseCCQBzMMQCuwZACUAIgCEAsgGVkmihBDJtEUhSGMQhgEb8WqdQEEAKgGEAEgH0AogA1vrgCqzgCSAPJ0ngBSYYHKdI4AMjz8yBoWViC2fPbKFAC0-HxQ0gjYFEjIAIryFLUpAlVCFYwiYtBwiCiodBQA7siJFCDM1AzMADoINHkwxABuVATaMFIIVNy8Aomi4B2SlagAYiBQADYLVESklNT0TCysAEybqYRPIiAw0PNWLDtfH5-QRCQFQX4QFjvISyBRKdgAOmQDDAuDOyG8AA8KDB5NBiAhkAAyYyQpSuAAWOLIwGIUCQQkI7HyAD4NAAuZCI5AhBDMYAtCooZyYzmELCQ5CU6m0+koGh8QwQeR8AC8AHJtM5HMpnN5VOrOKDvuDgekhBp8qymZyRVLiNhsFAIJDWswwRCWOkmayOcgnkjefzBZURZzAsBLJLpTAaXTKgqlSqNcpAnQ6CE6ABxdUAGmQZ2GOU80HKRo9ZvUFvUVpZNuQdtcDqdLoobuGJs9aSrLREsMU-qR4xYrjA-ApGMWDPdneBTKEfFAMBYFgoirkBHnCGIksu1CZ+b9gEKyZEPNjsKVjvhUxi0TDEZd8AQAaXOhdvAHpkQY+jc0sQ+gQTgpjCMBgApKQG34MgCwoAAzFB6WQRUrGTdVU3TTMc1oIY7AxTFgCgMA2yNXsYTkAcAGYkVw0ZkBOc492JZBQPAyDnGglQcT3PAhG3XdFmoRJOVoq5vELE0CQbLBpGkKg22QVlvwGUTqHEnFXSERJfXUTlqK4uZBOWVYEE5bRvESAJnGQAAqejlDCTRkCcNwvD8AJgnCSIYjiBJEimQh3G8ZRvGQpM1XQtMM2zdVkEcOhVFguxPEUKM208KxkAAHmRMJCBoThFMGIsKE8ZwcAoBQIGNIFJXSS1WWErjlTAQlWIgwkOL4GDZlIdsKzqqttJZKpOQAFiRPJCifEo2rAjqoO6u8VQnUxqlqWpy1nSUmiqWsmu8BAAEcNrbVcBpYJoyP7JQJrSPAEBAJ0YC44AzhAAgSRCZhsFpSFKl6ozGSeVlRuQABWJFVAoE66hYPI3o+xayBq00dqEPbrSeTk8hazrONUTJzu2y6+J3FgmPeTkADYkQANRAM4oDSnkfr+ioYAILN5HARgphoLEcTxKApJCRLGEUJnVklGAqVjI13ixzlBdxSUupgmhHAgfJcMVfIwgQZd7se57XvevAttqqEPkVtldOQAB2QM+QoAUXdDUVkAjFmYzjOVaBQ5UItcRz0EsvUDUttGvSrBq62xhtMXtR1nU0mcre7YmM+hXsgA)
 ![[Pasted image 20260727193155.png]]
+
 **특징 및 메커니즘**
 - **Step-level Checkpoint:** 배치 작업의 실행 상태(STARTED, RUNNING, COMPLETED, FAILED)를 독립 트랜잭션으로 DB 저널 테이블에 기록함.
 - **Automatic Recovery Scanner:** 리더 선출 이벤트 발생 시 선출된 리더가 `RUNNING` 상태로 남아있는 고립(Orphan) 태스크를 감지하고, 임대 시간(Lease) 초과 여부를 검증하여 재할당 큐로 이관함.
@@ -1126,7 +1151,9 @@ BatchService 핵심 클러스터링 엔진에서 스케줄러 노드(리더 노�
 
 **개요**
 `DD-01(Socket P2P Raft)` 및 `DD-05(로컬 WAL + Write-Behind)` 기반 분산 저널링 방식입니다. 배치 작업의 런타임 실행 상태(STARTED, RUNNING, COMPLETED, FAILED)를 각 노드의 로컬 WAL(Write-Ahead Log, DD-05 로컬 디스크)에 fsync 기반으로 먼저 기록하고, Raft Log(DD-01)를 통해 팔로워 노드에 복제합니다. DB 정상 운영 중에는 RDBMS에도 비동기 Write-Behind로 저널을 동기화하며, DB 장애 중에는 로컬 WAL만으로 저널 운영을 지속하고 DB 복구 후 Reconciliation을 수행합니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.4 DD-04 Fault Journaling/4.1.4.2 Design Approaches/Untitled Diagram 2.svg]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIHMwHsCuwAEA5NAJgKbYCM2AFAMJggDOAFkQQJQBQoks8IS2ARAAUwUALbgAntgDqaMAGsiYPISIAuADoIAQiAgwG2AMoQiOAEoYECJf2z1sggPraj5tkQQE2HcNDiIKOhYKsTYAEyUADJEIMRg7Jz+PHz8uEQA7tgxcUqh6loAghgQaOL+2OZEMGgAbkpSRjC8NmB2DlFOheZGvlwBvBAC6Vk58fmaCOYgAGZDVGgIdJ50GHTYAKIIyFA27eud5lQbfcmBw5nZseP4xJNRaM0ANjKFUdgAZNgAYkYAsvtsk5fn9TtxzmlLmM8rcCghpCJTABabREBi7Aibba7IiAzrSbQnTzeMEDJCoTA4WHYADMlFkCiUiT84MGAm+ICgTzqeQZimUsMmun0hiiICsBls9nW0hcUVJKSG-A5XJ5yj5MNUkwAIhIECBRLBKmYniApFsdntpTInNrzCckqzUn8iBAQJVtdo-kYhYUACpUAASTg2AA0NlQAKp+gCSAHlcE4AFJxyPmXBvQGelwbJMeLw+BBoUzYNWOFxuNTYAAMADpjKYcFQmDB5MA0LshhRzJHcLgY7gAOIsbCABjrALod2EAI2taDUC1RkbCAEFXADodgA5BwAlQ9hACJ9gFQJwCDA9hAKETgBmOyg0egMdhsAC8N7I9cABzWAXs7sIAdhY3gBsF7AbwApc9hAHge7BABrxwADVcAT6bsEABQXsEAQAngOwQALpsAEZrsDvHxOm6IwkQAPk6EEq1Ies6GaBA4zAYAGF4P16HkOgKBYLQAG19zfG8AHIez7AdB3YwDsEAEPHAABmwAdocAEBqKByZYR0ACFnAB+a98v2wQAHCcAGLWAF02Hw-4kVwzCekI2tyDAV0MDABBSwoqiEBouh5CiKA6CGJjbPkJxSGrUhNK0roej0pwjg2KtwnrEyAEcMCIJyqnoOgoGQBAKFc9zPMYhAmJfRTP0AH07sG1bUkWrOkwMgqCV2wQAXccAAFrsEAFLHAFqZ7zDmOfyCNpesQGAYBiQeZBCi8QouqeCQKA2XAAEVIw2KaAo2QojCMGNB1wAAabBko80g0qY6Y5mwcaMDkDBRGwQBLVcADXHp2wGMECRF1RDkKQYKE0dABfRwAF0eNJFPAiohIv46Q3mwGY6D1GBNO0v5dLwgLjirGkjPsIaJCMDAYBgKL6JM2L4psAgbwgMBIuvO8InrD9v0AD3HABzZ-jAEcuwBHlsARkGQMAE6HAEjVpDUPQthZW0KJ-MCqsABZQqIX6nNc7VxciyKKCLYgY3xtJVBpfhtsAABrAEqx7BABmxwATuewQAPRsAHZbLsAEN7AAaB6DsBpurGow2GNla-4qwAVnrYhfsi1yGOYkrsBej7ABxB9baJS8g7aA1jcq4-sh0AHnHysAEAmKoh4EdMFuHsA94zTPMsO7Ijx3AuhvmoirAA2T3HNAEVfY2zy1qIAAPaoSigRY-TQRQEBvfg-XCdWfHL3DZTtILsAAdnrVv29MBvw825u25gDuu57zx+8H4fedte0x-3yeAA56ygYhRHbUwEBgCRBwwcACGbap5CSpem+wUpe+3oftsfQACcewIAXaHAAjPYABPHsCAACawAuZOABFx7AgBWxcADqr2BACIk4AV57sAc2wIASh7AADk95ceB8cJEMngATjFsAU0EhXIbFXuvRKjctrMUKBAJEUk2FxhviQQAEqPJzZpzQAGEPs28qTBGWDOaABExs8rFsCAAwewAgGP8XMJ6b0MhEREBRGiDE2BACbzaOQAKmtczQjeEeR8s6Tw8pQuQEBXImD0GsN+Rdl7YCcg4ug-cqBxj+IIKIGw-QbG1OrZiFNsDSMqoAEp7AAdS9gQALz2Piak7F2fxCJESRt1LwvV+oEEGlQkahQqAAGknBeJ8X4gJa0mHbV2kMXq2B9aAGge-iIIbayPCYotaK5AA3c68d4IMwbpxBNDZqliiLkBAK2VG6NMaOyGTDAkliQrYB+rLIgSZMDmRAE8KoNQwAECcW5FxbiIBrE8d43x-jAnBPSior0Rgdz6L0YY6C5VAAAE4ABEbIkxOToAG6bEkLNwtmQkSZCLiPoGDSMwACB6DWRs-UTx7EnPom6Iu58bxHLdEis5ZTLlBO2oAFS7AADCx6O52APnYEADKLFVAAofdgQAOrNHmwJGQQ2p-QbEoLuU6LN0GAAWxlgmkgA)
 ![[Pasted image 20260818135525.png]]
 
@@ -1218,9 +1245,12 @@ BatchService 핵심 클러스터링 엔진에서 노드 간 상태 합의(Heartb
 
 **개요**
 이미 서비스 인프라에 구축되어 있는 메타 RDBMS(Oracle, MySQL, PostgreSQL 등) 내에 분산 제어용 메타테이블(`BATCH_CLUSTER_MEMBER`, `BATCH_LOCK`, `BATCH_QUEUE`)을 생성하고 JDBC 트랜잭션을 통해 클러스터링 합의를 처리하는 방식입니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.5 DD-05 Persistent Storage/4.1.5.2 Design Approaches/Untitled Diagram 1.svg]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIHMwHsCuwAEAhEEMAFtgHJoAmAptgILYAUAMlSNWGZVQJQBQokWPBBJsAInyESLNlQ4BRBMigIaAMmwBlYlQoYANnLHYQAZ07VaAfUXLV-cNDiII4gCJRTEMFABGGCF1sAGE0BBgMMDAqcIBPELDvNH1DMGMzCyprJjQYAGsAWVReGIpeB0FnERR0LHFNInAggqoIEGwAJTdcAs1GAHkwEBhDAHoC2M0ARSZRgAU0L1QqaaZuYwBiADFaLYBWLa2Kp2FRCVoAFWCACStgpgBVTQv5DqsC+QLcV4AdBAZrqxIL5WK4NC0ALYgjiaNoQDCmdYmczdd5UKFyC4gXyGY5CFziXCXG5WJj9YIAaT+DDmVFMpigEM8Tmwo2wMlMNBy+SRGVR3LyWJxVDxVTORKutymD3kMupHi8Pn8gQo2AAUmhfNgphgqLreSjcFYdXqqELcaVyqLTjVMDhJMRMnhGAB1NBgPJyTJ8AQnAliQGOEEEbAaE26hIIUwYCFGZGZI2hKMxuTW-0Okhuj1e+QADyoEWgYWwthUVHS5nI1CNpfslvKqDt2DmjU52AAjAAuJ30QPA0EAGnZrHY7NyeToMAAjhhPFAiwhQ+rNZ0qMpFQQoGFeFWsjYlGWALQAPl32XHRTA3fbADpsABJBDzqAEGh9iDBsHD2QcAWr1QAO4gPovDDNAABur6ZOe+SXuUZ6kheqAnqikLQuaVDdgATHeDxzG4lzyNgfwSiS9xPC8bwfF8rzEf8HTJJh7LyLQbivEOsIEAi3Z4XwYFQJBgTYKh6LodiuIiRiYAYYeJ4IQKl7du+n7YA8wAUK+ZTUPxgk0JJYnCvBXAwYUyHHvy44Yd2ADMuH4YReDErcZKUnRmjyBc2BoABqhgFYCBcFYUAUAAvAA5GeYV0QwtDBPebjfm2Ap8TAEFQRZ+QYbwGWCuJVCyaexmIbBqDdhyXLjiWuaBAg1BaawqUCelRoCll2mNbp0HFaZYBGZY+52Pl5lGuGZp5d2AAsd73qQ7kdJ5M0XP0dGkVKMoytFnHwqY3ZzPIpBuDNADiKVpUJqKjVlF26rqMlyUVtZMRqWodGuzJyLovDtWdekjTdY2GfWjZ1C2Zg0Fh3a7s6WaehwymDtq-3Nsk+gqMgS55gWARbggO5cImYTRrGYAoUaaGYuN2B7HZBEvCtTl3I8zyvO8nzfB00UMYY3Yuv0HQUuxWhwtxqlzKdTVCbuBPJsToEdc1aJSVdZOiRTwoFVLdyEymV7YOTMLC+YakaSqX0NT9wkq0reV9VQ0tE3IpPGv9VnYAAbHe7lMPIwSeRoeG00RJEM9KspB-8Wx86LgdaBS95zOy5IC244udddprK87Gd5Rr+NazLcjds9IT6CAjJBAwGzPYe7YAAztnw30S79We3TbePVvnDsk4VnePd2ADsd4XD4yDIF6wREBgCATpjhY43LFua49Hd2wNR692v-fYAAHHec8BDQJEEI6uAImW9JjsoMDRZP08TnM6AwHSDJKHwy8Hqoued0m3fdnfM8qpYwXAkCEwBDCmybp1D+g1bb2x1k7S6lMACcNMHLB0lMada4d3KeS8FxUw4U3D9FIPIMKi9m6W1bgDCSf1s7q3uj-bWxMi4ri2giVS6lNLRWIaQxu5tKHpzboZKBUFNa-x1uUS0QA)
 ![[Pasted image 20260727204045.png]]
+
 **특징 및 메커니즘**
 - **Zero External Middleware:** Zookeeper/Redis 클러스터 등의 별도 서버 노드 추가 설치가 필요 없음.
 - **Strict ACID Transactions:** RDBMS의 트랜잭션 isolation level 및 비관적/임대 락 기능을 활용해 확실한 데이터 정합성 보장.
@@ -1247,7 +1277,9 @@ BatchService 핵심 클러스터링 엔진에서 노드 간 상태 합의(Heartb
 
 **개요**
 K8s `ReadWriteMany` PV(Persistent Volume), NFS, AWS EFS 등 네트워크 공유 디스크 볼륨을 클러스터 각 노드에 마운트하고, 디스크 상의 공유 메타 파일 및 OS 수준의 POSIX File Lock (`flock`, Java `FileChannel.lock()`)을 이용하여 분산 합의 및 상태 저장/동기화를 수행하는 방식입니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.5 DD-05 Persistent Storage/4.1.5.2 Design Approaches/Untitled Diagram.svg]]
+
 **특징 및 메커니즘**
 - **Shared Volume Persistence:** 별도 RDBMS나 NoSQL 서버 미들웨어 없이 네트워크 파일 시스템 디스크만으로 영속화 및 클러스터 메타데이터 공유.
 - **POSIX File Lock Synchronization:** OS/네트워크 파일 시스템 수준의 파일 락을 활용하여 배타적 락(Mutual Exclusion) 및 상태 업데이트 보장.
@@ -1268,9 +1300,12 @@ K8s `ReadWriteMany` PV(Persistent Volume), NFS, AWS EFS 등 네트워크 공유 
 
 **개요**
 각 노드가 로컬 디스크에 WAL(Write-Ahead Log) 기반 임베디드 저널 파일을 운영하고, Raft Log를 통해 피어 노드와 상태 변경 이력을 복제·동기화하는 방식입니다. 메타 DB는 최종 영속화(Write-Behind)의 대상으로만 활용되며, DB 장애 중에는 로컬 WAL과 Raft Log만으로 분산 합의 및 동시성 제어 상태를 완전히 자립 운영합니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.5 DD-05 Persistent Storage/4.1.5.2 Design Approaches/Untitled Diagram 3.svg]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=C4S2BsFMAIBYDoCM8Cs8BM8DM0CiBbAI0gBMTToAZAewGMBDcaAERAGcBraAdQEFLoAMRAAnNsGgAyaAAVIkEdADKATwB2tIeGoB3AFB6ADvRGhaIY2uABzEdQCuh6ADlq5aImgAKSpHrkRAEojEzMLeitoACJXd0QALhZ2YBEQQntgUgAdNUElAFloAGFqEUgo6Ho2F0QAfTz8kNMQc0sJGLcYBKo6Rh5+HPyI+msFCqqa2r5KfNsmsLbo2K7EmgYmVk4cpWBSkZgvGQA1IsDx6uc6zY55lvDIjrjEgCV6ADMJOQVt9VoACzsahAAC8xpULnUviJVBpbq0Iu1lh5EtxUpkALQAIUgfxAahIPw0AOoQNBInOk24mLh90RnWR0GekFoJPM4BA9FAJJyuDU1jx5XBkyZLI0ICgekg+JpbVsDicSPQ3ihwWMzXhD0VL3en3kIkJ-0BILBE2c6FqUJhtBlCKW9PQq16TGmg2Go3JQrNU34sxENs19sd6ySWzUOz2o2VJzOnvN1397SUfxMFHykGA9Byz2YmPySgpaYzOcl0r0AF4yx54NAANprPrTISicQAXWggEGBwA7C9BAAM9gF6a6CAeB7oIAdDsAN3PQQAorYASocANgvQN5sX7QCt6S71ArogB86+mvsSyE8+AynMgO1POS8UpSKjLAG88eQAB5l2AABkQABpoDlgCpDJAZZRPkACqAAqvBgQAkgA8s4UTfjkJCcvQQHwOhUQAL6BD+ag1l2vYDoAKWOALUzLZ6PQtCgAAbqelI+nMu4MSI27rtcB4YNAOhopAvD4oIS4aF4ORsJA1j4NewhQEBb6ye+yA6IwCHQNeIgqDhOQ1uOU5zgugmaIABIOAAx1gC6HeRlE0XRbHsDc1mcOirF1HutiJDO86AIBjgCxg4AKmvQIAImOADMd3j1s6-BNmIEh+YADTXBOQFkgLRmSTPG5aVpgtZQsovxtq8HzQIAIjOAAiNgAi49AgCti4AOqvQIAPKuAC2j0CAB6NgA7LdAgCvPYAOBMrmWa5OcxjkWnqVqJJgnj6WB1BQmwV5WGp96PpAL7ydhFFUQlVmQoNvw9QNChWqx5qWr8w2cYdGjPDIRReJkIj4GWX4qTNt4PviC2vh+2G1qwZRUdAYFFDIyh0Bw6ayOgMjmatiUwF6p3WjDm0aPt3ozC50CYDg9CGAB+JMoY7IMJeqlPfNi3vcE8VQy45rOX6Xo00j7Fo-AsBcTxfEkAJvzTTeGl4XVo4Tm5enLl53kQ5ZSVevGUs2Q5O7U8xiT86L-kBXocWQ1ZcY2WuCsoyxSOw4kHWq+rfia5Leu+rrO3Qr8cvrkbTMoLICO0EybCGCSoleEo9i0LQkBsGwZYpPYkCxebEvQwdbsGBW0BYNWACK9ilPY+DQIAJ3OANA90CAKprgAe40OQgFB23b54AqBNddtsP9U7gA-NYAGD2ABhDXip+n+A4SbRfeCy+D4GAUEvaTiDBI7bv9Q0iRJ54-eD8A7O8Fj4AqNzs3Pc+b2IMtFPrRujTrg0U8FIkgAqXYAFV2ADWd5fQIAgBOAJVjuFeMP6JpvgpQqMoGZJcIaiMMaEg486jH36jTGenFzyZHyCeLkagSgDzAJkEgZs96SxAQUVBFtoa9X1vHSsCBayAEnlwAO0PQEAC1j7k2yABE+wAm81GR4DxLEOJHyMhzHmaATd3I1wnrte2O4nKYkSAgTwahqCgDeCoBBC917ExHtvZaGto6TFhitZRu5qQaO3IWegOZhGcSqL8TEnJ-jD1EqYWRc15FLRwjWAAUjmIo0A6EMMACATgBCwfFmtJKOjiy+MxA7QR+icA5mgGYhQEg-YByDmwLByj-FxO8TgqY1JUrQDQJ9TE0BACl44AA1HoCABG1tqgAbWugCQnKzJWTig5HA6AldACWq4ARkG2qAAWxmuYikrUGogoYUlSxRQG-P4xIoTAAkjYADqXAAzY-OQAF02AAgJkp0BAAINYAAcmylqKSb00UbJIDbRFFUqA2j0y6KEekpA0AACO4c1KUCqMAaRSDSDD2fF4WxoTAATncswAk53QHob5QugBHZunNAQADhOABi1rxlMEn+MCbUPZ-TICJHALc5ghAnmvSwCgN83hAAf3Vw6AABxTGM8UCeAAH5wA-JHNBMAEm7L6ds-qjM0BKjKP4bgjBCWGC8G8Ow+A0UvgxfdXY-Lt62O0o2QACMuAFHmiF+9pZXFlv1OF2zEjWExryFIIAg7eEACBNgBfdsADgt6S3yABwa-oAhAAro2Mm+TdAAaa1S7ByUdZ0q2eKSAhyiwnLQDgdI4AOBWmVdUzkIASReDVYYDVqQg62MAD7jgAQWugA4zETixmABz2wAteOAA1Bn5RkxbrMhUcvxhaAlKvpW6xIaAWaYnsH6q0CC8bpgOIAHVnAChE9AQADs2ABdxwADIt1Kaa0h18Ti2JMpuuQNEogA)
 ![[Pasted image 20260818135019.png]]
+
 - **1.1 `mutateState(entry={index=401, type="MUTATION", data="..."})`** (`Distributed FSM Core` → `Local WAL Manager`)
     - 락, 큐, 저널 등의 상태 변경 요청이 발생하여 로컬 WAL 매니저로 상태 변경 엔트리를 전달합니다.
 - **1.2 `writeAndFsync(segmentFile="000401.wal", entry)`** (`Local WAL Manager` → `Local Disk Storage (PVC)`)
@@ -1373,7 +1408,9 @@ Design Approach 3: Embedded Local Disk WAL and Peer Sync
 
 **개요**
 자체 분산 엔진 모듈을 기존 배치 애플리케이션의 internal JAR 라이브러리로 포함하여, 동일 JVM 힙 영역 내에서 인-프로세스(In-Process) 형태로 분산 코디네이션 모듈이 실행되도록 구성하는 방식입니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.6 DD-06 Engine Deployment Structure/4.1.6.2 Design Approaches/Untitled Diagram.svg]]
+
 **특징 및 메커니즘**
 - **In-Process Coordination:** 배치 스케줄러 런타임과 분산 엔진이 통신 IPC 없이 직접 Java API 수준에서 상호작용.
 - **Single Artifact Delivery:** 별도의 분산 엔진 프로세스나 컨테이너를 추가 관리할 필요 없이, 단일 JAR/WAR 배포파일만으로 배포 완료.
@@ -1398,7 +1435,9 @@ Design Approach 3: Embedded Local Disk WAL and Peer Sync
 
 **개요**
 분산 코디네이터 엔진을 별도의 독립 데몬 프로세스 또는 Kubernetes Sidecar 컨테이너로 분리하여 gRPC/REST API로 배치 애플리케이션과 연동하는 방식입니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.6 DD-06 Engine Deployment Structure/4.1.6.2 Design Approaches/Untitled Diagram 1.svg]]
+
 **특징 및 메커니즘**
 - **Decoupled Lifecycle:** 배치 애플리케이션과 코디네이터의 수명 주기가 독립적으로 격리됨.
 - **Polyglot Support:** Java 외 타 언어 배치 애플리케이션도 코디네이터 연동 가능.
@@ -1458,6 +1497,7 @@ Kubernetes 환경에서 다중 스케줄러 인스턴스의 수명 주기 제어
 
 **개요**
 Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 영속적이고 예측 가능한 고유 인덱스 식별자(`batch-scheduler-0`, `batch-scheduler-1` 등) 및 서술적 호스트명을 부여하여 인스턴스 수명 주기를 정밀 제어하는 방식입니다.
+
 ![[ArchitectureSpecification/4. Top Level Design/4.1 Architecture Design Strategy/4.1.7 DD-07 K8s Replica Controller/4.1.7.2 Design Approaches/Untitled Diagram.svg]]
 
 **특징 및 메커니즘**
@@ -1496,7 +1536,6 @@ Kubernetes의 StatefulSet 워크로드 컨트롤러를 채택하여 각 Pod에 �
 
 **개요**
 일반적인 무상태(Stateless) 애플리케이션용 Kubernetes Deployment 컨트롤러를 채택하여 복제본(Replicas)을 관리하는 방식입니다.
-
 
 **특징 및 메커니즘**
 - **무작위 해시 식별자 생성 (`batch-scheduler-7d4bf9475-x8q2z`):**
@@ -1597,6 +1636,7 @@ Chapter 4(4.1 Architecture Design Strategy)에서 결정된 7가지 핵심 설�
 
 ### 5.1.2 개념 아키텍처 구조 (Conceptual Architecture Structure)
 DD-01부터 DD-07까지의 의사결정은 개별 문제 영역에 따라 독립적으로 도출되었으나, 시스템 전반에서는 **In-Process 임베디드 라이브러리(DD-06)** 형태로 패키징되어 **단일 Raft 합의 코어(Consensus Core, DD-01/DD-05)** 를 공유하고, 그 상위에서 **도메인별 다중 상태 머신(Multi-FSM, DD-02/DD-03/DD-04)** 이 결정론적으로 구동되며, 하부의 **Kubernetes StatefulSet 및 로컬 영속 스토리지(DD-05/DD-07)** 와 결합하는 통합 아키텍처로 구성됩니다.
+
 ![[ArchitectureSpecification/5. Detailed Design/Untitled Diagram.svg]]
 
 
@@ -1649,16 +1689,6 @@ DD-01부터 DD-07까지의 의사결정은 개별 문제 영역에 따라 독립
 #### 4. DB 복구 시 정합성 복원 메커니즘 (Reconciliation Lifecycle)
 - **복구 감지 및 순차 정합**: 메타 RDBMS 커넥션이 복구되면, Write-Behind Worker는 로컬 WAL에 보존된 미동기화 저널 및 큐 이력을 타임스탬프 순서대로 RDBMS에 재생(Replay)하여 최종 정합성을 복원합니다.
 
-### 5.1.5 상세 설계 뷰(5.2 ~ 5.4절)로의 연계 방안
-
-본 개념 아키텍처는 다음 하위 설계 뷰를 통해 구체화됩니다.
-
-- **5.2 Module View**:
-  - `RaftNode`, `ConsensusEngine`, `RaftLogManager(WAL)`, `LockStateMachine`, `QueueStateMachine`, `JournalStateMachine`, `WriteBehindSynchronizer` 간의 모듈 인터페이스, 클래스 다이어그램 및 패키지 구조를 정의합니다.
-- **5.3 Run-time View**:
-  - 정상 상태의 작업 디큐/락 획득 시퀀스, 리더 노드 장애 시 Failover 및 상태 복원 시퀀스, 메타 DB 장애 발생 및 복구 시 Reconciliation 동기화 시퀀스를 sequencediagram.org 스크립트 기반으로 정의합니다.
-- **5.4 Deployment View**:
-  - Kubernetes StatefulSet 매니페스트 구조, Headless Service 네트워크 토폴로지, Pod별 PVC 볼륨 마운트 구조 및 컨테이너 내부 자원 할당 정책을 구체화합니다.
 
 
 ## 5.2 Module View
@@ -1721,10 +1751,13 @@ DD-01부터 DD-07까지의 의사결정은 개별 문제 영역에 따라 독립
    - `Multi-FSM`의 상태 전이 이벤트는 내부 링버퍼를 통해 `WriteBehindSynchronizer`로 전달되며, 백그라운드에서 메타 RDBMS에 배치 일괄 반영됩니다.
 
 ##### 4) Sequence Diagram
+
 [원문링크](https://sequencediagram.org/index.html#initialData=IYYwLg9gTgBARAFQJYFsCmsAUBlEALNAEwFcAbNASjhmAGcZl0oAoZgB2CjCRCQ4DswAcygRibGADkIhNDACMMTABk0wWVArtO3XgLDxpshUtXqMFADr9cBEuVgBhaGmp0pMtPID6AQTZs2lw8fMCChp4mKmoaVvwAsmTcALQAYtjxbvRGXt7p8UG6oeFwOVFmsdbO-LRoNcS0AKL8Qkj8rjTZnj4ASsAAZmCFIfoRxorR5prWfYPKEELxYcBCGEoA6r7KVJ0esj6bysN6YQalkRMVFtbrUEhgaABCaHhthNgAnvz4ovxIAF4YLJ7XLrR7MOqEVgcYInQQiMQSMoAJiUqQgpFIEAA7hZjsUzii0RisbjpvxqrV6k0Wm0Ou4csjvLMhjCiqNzsZUZh1tAANbXfiPYBgfDKYDEb4EKDA3lQAUsSHQnQjU4I8QgmAAZkw6MxOLxbNVJTKWuJ+rJcUpdVoDWarXawJyWuZAyGStYzAAvF6FAA6GCAEN7AA0DMEAvu0wQCxa4BdlpggHgemCAQYHABxrMEADD2AHAmlAARbPJAAMyIANDBcwWAKwUGA+5iMDDJAB8OR8-jYAC504ANOZggBKhwAA84AQSZg1kAHUuAGs7AA41w-4mAAUhAAEbeeT5+RaUDcABuIrkzb8AWYe9bjb3LI7oAAjsQkFA0PMQHzMHB50uV-I4CXyHQ0AgEMovVq+a0Ou4BINuDwgr0bqsKebont03iHOeASQvMQjWCoADyjgANJ+I4ACKACqACSPSNCW1gIBgKBemuzAbmBO6QYhWyHghhzJPB+yuoMHb9LQXwgDAmE4cwsiMeBu4cWx7E8Sy3FoEyZ4wK2kLNGAdxoLQWG4fhxFkY0IFbsxjK8UMZkKYpUF8apKH8IQGlabQPTaWwEA1GgODECAIDabQXqacQlDiWooFSSCynQXJuQKU2nguipakOU5SDabpeG+IRpHkcZTEQc65kxYlcHWeZHbJY5gjOa5tDuZ53m+f5gVQMFWgSeFpkJUVzD8BAEEQJuaywbZBHENAxAoEoWoAPRalWgCWq4AGuMwIAN02AIyDSjOCgKD3A8hBaCNYBlfkyFsKQHwZfpOVGQxnUFQh+QxT4+RcfF8luh2958gA4lApxEBh-R1H5CAQAK-B0fmq7tWFJkPTxT1HW9R4BF9EAPr4IBXjeRBKMD3w-uDdRQzDoWSV1H2DKwPowMiAYhjAgAKCzAgCJ44Ao6MwIAHuOADmz8YwIAOws9oANgtJgLMCAAATgAIjYAg505nm+ZaiWZb5gALFWNZygqZWth27mYmNaDBZgh0Ice72xZ9MCyFeRs-nQj55RFR3PeZZVITQ9mEGhGHEY0RGNN42aNH7AdFlRNF0U7lOgmxHXw2ogzDTJRzIxbUW2ZVqXpaHgfB7n0cI0pRWWaVFs2WAFW4eT93SbIGcWQhcWFUlXvZzpudByHAcB4XddoCV1Mt2XR1V2J8f5f3g+N1Tx3l3kGRnRdvs93n3f+40MAAGTTrOmFET0khbN42AIL4PQII02Z9yxSOPRkKNN1bCAO9mSB1SK+BEHOi7LmTE-O3vgUZGOs0YMFfu-Dgoo7A-1fP-OGk8WIsldseRsWsMAdkIJAz+eAX60EfC+P+8gSwE1BsTSGK4yasAphBdBLAAE7jdGsOhQA)
 ![[Pasted image 20260818161545.png]]
+
 [원문링크](https://sequencediagram.org/index.html#initialData=FABwhgTgLglgxjcA7KBzCB7AriABAOQwBMBTXARlwAoAZEsUiASlElgWSlwCJDSLqdBiWYAdJAGU4ACxJEsAGxG4AwhggluuMAGcCxEuQD6AQRAhW0eIjAoefMpVr1GTcQFlFsALQAxCe5auvqkxv7uluw2drwGAs7CYkhqSDokqVg6AKJIqDBImtp6DsYASmAAZlCR1pz2cU5CruLlVTQYqO62YKjKVADqJjRMQcUGxoM0NRy2XLH8jS4ibkj9EDBQJABCJNL5RBIAnkgymEgwAF4ioyGGRv1bwOlEwNPRaJg4t7gATNS+GAUCgwAHdlm86vMyH8qACgaDluIUmkMtlcvlCsEHD8jK1quArDMYg5ftR+uoANaIpBbMBQGQ0MBYE6yCA3ckQKkQJ5IF4Q2bobB4EkAZlhgOBYOY-OJcRF-wlCKSyPSOkyOTyBRuDhFuMq1WeryIdLAACNdGRuO4SFAwLhSgARLbuCQ3a22p2vAlRSFZAAeJDgWFgGCQuAAKpBelBxFQAGruXAAelwAGkABx6AAKxBGRQjUZtr2AAF4S7gRQA6XCAHYXACVDgBsF3CAE6HAJGruEAIOOAEPHcIB4HtwgEGBmu4QAps4BACdwZeAYDgsAAbnSyByucBlyJvAA+ABUkYg0YAXLgFEyWVnMHASDodFQAFIYU1GcgABnILBn88XBb3Rd30e8m7XCBDxAc9Lx0CRbWgORqCzABJB0SwATgAFnTH4WEAzcSlMcxDxwY1NjvLAICQMAFFve9HxfAAae0AFV8HwWD8AAcTfWcYAXTZbmMMwLGwvisPGIxwkPMBzAUQ5YxvAB5OjSnwIZcQYpjWJYUh304z8BPMacOK4shsPCYANP0xd9WUIyAmAX8bX-DdAOA0CrzUABbEAlE2IhqH9DY1FIEsn3U+gzO42zqlLctkOrQBE8cAUdHcEAETHABmO3BAAyZwAazr7XBABDewAGgdwQBfdtwQAXVcAHAnJxLVdKXXDcdJAQ84AwdzPJISMdApCiH2fchaIkOiVBULIJAkYLNIM3BAL0j9uPq4B6qE0I9SqQ8NCUC12jgTruDvbqX24JhcAAMlwJqWptEgiJIsiuqo19pq02bhLxEyQpmwzhL4+bnv1Ra7kmMTzGedpUFjGgZJUVNcSyGgshMCQsmO8RZPkxSaCMFQZPcLNYfDLIHXY96ePuIZXvG8yqks4TJm+pa8T+nE8UPPjnhyKB1kvWgIah0oYbhhHjtwFGFKUzHsdx-HCcej7SEZ-VaZIOWqns7CmdwExIbJ0KZcV5bqlV366oMXU1ZZ3k2Y569wch6HYfhxGTuFtGMaxnGsjxgmHomnU9YVk3fr+sp9WZzXTKJn2XoN5WjaW0TtAkqSkCoXm7YFo6kVdiXPfJp7Y+sqz3BVn6VtwGTUy18PhOMqOoCLpa+MPCDFzokACLkCvpeJl6w87uave0z7dJ7gyLIgYmvrLXAAFZqzWDYSG8HY9l5XBABE+wBN5sABjr7SdF1cEAVAnAEtVwBGQdwLfABU16gHQdbwnynw6pwLwP7i2YDMmkLI53SKBaAwLaAAkYA6CgOoQ4tEACKWASBQMAcA0BtErqkQULAkBEBDhS29tTR42EHibndGAJ0h5zT0mkLBVIIgoAtzbtJe8KD4HI2wNdBQpRAzqCIDoDBn58Gem4VsOu-1X6qGaq5DYpdy7Dy4TaAhjwJG5wEcAIAA)
 ![[Pasted image 20260818161818.png]]
+
 #### 2. Scenario 2: 리더 노드 장애 감지, 신규 리더 선출 및 미완료 작업 복구 흐름
 
 ##### 1) 개요 및 사전 조건
@@ -1761,10 +1794,13 @@ DD-01부터 DD-07까지의 의사결정은 개별 문제 영역에 따라 독립
    - 팔로워 노드의 워커(`Node 3`)가 큐를 폴링하여 재적재된 `Job_101`을 인출하고 정상 실행을 재개합니다.
 
 ##### 4) Sequence Diagram Script 
+
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIHMwHsCuwAEaAmAptgIzYAUgNrXYAyBIhYAlAFCiSzwhLYBEA2gGEwIAM4ALbABVwyAhAC6PbKOwA5fAWLMCCPM1bhocRCnRY1G7ACZygA6HAO7U06DFmyOduPAWgQidIjBEAUQRkKAQCJRV1QisAfQAlEAAzCAN2Yy4IXiTU6jRkAFkuEFkwcgB1AEFqRiiRC1i46up09xNeQowAG2gAWgAxAGVC+saCeOHCto4OngSCGDQANwIwAE8hmC4IsDGYicTFle1dfTdZrNRMHAPrcgG0bu60AHcAegq0MABrNddDJdPHcAMwPJ4vV7-AA6CG8vn8gRCYQi+w0IMSKTSOj0zAAvHiSAA6bCAGs7ACrN2EApeOAA1HsIAcHsAuwPYQDwPdgABJ0SAAIzo2UAAwuAEPHACKjgGGx7CABBrAAOT5AAilUhn0AAwAFgANNh5YqlQBWRgE5gINAQIgrNbjYgALnGJGwgBBVwA6HYAOQcAJUOwwAifYBUCcAgwPYQChE4AZjvIQlEYhYIBg0GWIBN43iuTSB3jWL6AA8DlaOVyILyY9hYUKxZKpbCyMQiTrABCz2EAvTWAH5qWEnMak+gA+JsJ60CLh4KB4GNEQAgE4AXcfIkjWAFs8VZGxpky323PmjVrSBgMAcaXlsaCHhHmA8Um1bDx2ApzPmBGowO48vWk2Wn02x2sdbkiJ1ggYNgAPIAaWYQgrygaNYwfGp9AJawSQWABHDACBECAADUd2wQAYPodQAdlsABLmXUADqXWU1DBvgwCdsEAAkHABzZ8gQWrYdABaGxhyAAERY5ViH1PFmBfBcDgxTtsDghCkNQk0yFPc8NW2XQ+wHABJPA8R4JMeA1bpRAgfJkHk3QCFTPEVT1S9IxAm9+ObRN0Us59rMEySiO0-MEEAHVnbEARkHsEAAJrAFzJ8h-1nQgBJTWymkE4TEJQncFhEYAfD8MhtxNABxYQkF3PEIDABCNUk6cWCA0zQKICyE30I1YzNcpeIga1ZRI7LyLIKx3hBZjABoZzzAFi1wBdluwNsnHoc1AE6hwBKmuwQARMYDSDCRBEkul6KBBhGbBvUAHYXsEAV57AAWxojOUMXNskAHBrAB2h1j2KVKwNTY5UQWui6VS4nilwTULDima0wAIYANPWbwJwnKAIBNPBtJEMhknQCddMIAziA1CA0Bh-TDOM4DitvKZnqaKYn0XMLX2wXS+kKAgJ2+dZsAW-oplWjadsm6bCuvMClyx7HDle-GCGC1JrSqdccRCLKoEQiTJ2ndTnDWRTlNU6S0ABoHkYMozwyK8y7KxDneYgPGav5gQ-3BZ43nNdbsEAAnGpQKugNdZoLLP0IA)
 ![[Pasted image 20260818163316.png]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=FDAOEMCcBcEsGNYQHbQOaQPYFdQAIA5TAEwFM8AmPACkAOhwHdq8AZU8MyASjCjkRWjwAiAMKZkAZ1ITs4gKLI0sZKUF5w4wiVIUA+gCVwAM2jcYCJOFRCAstgA2cALQAxAMrXV6zWV1vrp3gsrQT1SeEwAN1JIAE9XeEtlSE8NIh99MMjgKWIQCDM+S3QsXG9yKmpnTDs7TAB3AHoAdUxIAGtornzA-iE08gBmGhb2zoAdZAAhcGh4AAsmcGxkeeiUvBGOyGzkXIDzfgwcfFkADzDsODE8eQjYLGQAWykTboOioTOLq+Q8ABUoGhSNAJtQAGrWPANPAAaQAHBoAAokDjrAGQIEmHIgAC8OLwABYAHR4QAHNYBezuoAHlIKA5pYOHhADsLgBKhwA2C3hAAg1gAHJvCAeB68IAa8ZZgAB5wAgk4BBzpoAEUAIKuRwABgAbAAaPAAEQ1SoJHDxwH6ugMxkcAD5DRlwhEAFx4aCQWBoIGQUJW6JxBLIahccDwOARGbkC2urK+-2BspGowmYOZCJmi1+W3iT0AVWQhiUsHEc1IxAAUjhIMhwHZxN7gGHYAHoEGtL53Ab6zo-I4E82Qza8K06ZYmNmBPiJgBtQsAIx0AEZFZOaK5oIGcXpUwQCABJAgAcQ4AF1gGQqzW6+k-CBkJha92opBI5bIrbAB-dgBExwAzHcz2dRx1OZ4zALtDgBGevAzTwQAGOsAFwm8EAX3a8EAFm7AAq1wAVNf5IVAANVwBPprwQAGmsAVAmm3STt2xPdxbUgUh5AAR2wUgqJpXtkABcQ2lBL9p0ndVEQdVpYGgGIcQACTXTc+J9P1qwjRNGwk6w23NDs41tUJHAoqiqLwKkYX3VhRKPW9T1jK0ZODaMFLjd08FER5QDsYFyGoQBcWbwSdABcavBAFeewAbWrwV8uAPbTxLkq0QF88Na2jaJb2NEw8TwABWEkGDwQAazsAFWa8EAFpnABwJvBAA1VvBAETxwBR0bwbDAEGBoVABDewAGHv1YKxMvIzjGATZokI7R9GMvBQGqOxpRU0gK0Pfz8OjSs-MvZrtga6BWobaxbTISjqNIBi2gGsbjzavTm1bGb2uMW0Vo1bMIFmXNiE-TAJ1YnytJCjbZrwtrIpkib5uOmZ5hWi6rpndVDCkeBlswDpkBxadFQoG7BvqjsRoms0ACp0Uxa07CWFY5g4zBAfEcRmMu79Jyh9awpvCbgCAA)
 ![[Pasted image 20260818163350.png]]
+
 #### 3. Scenario 3: 메타 DB 장기 장애 격리 및 복구 시 Reconciliation 동기화 흐름
 
 ##### 1) 개요 및 사전 조건
@@ -1796,8 +1832,10 @@ DD-01부터 DD-07까지의 의사결정은 개별 문제 영역에 따라 독립
    - 미동기화 데이터를 RDBMS에 일괄 배치 반영(`batchInsertUpdate`)하여 데이터베이스 정합성을 복원합니다.
 
 ##### 4) Sequence Diagram Script 
+
 [원본링크](https://sequencediagram.org/index.html#initialData=A4QwTgLglgxloDsIAIBEARAggcWQZRgAsBTAEwFcAbYsZAUQQHMoFjVkQBnZAYUqmJIAUKEix4IJGgByAe1LFkARmQAKADLEQCsAEoAOggCyVaAFoAYniPIAZMgBKIAGYoGzVuy7I5CpQH0eWTBiEXBoOEQUVF9FFQ0tHQMEJ1d1WUYjSRBGGjUAdUx1XS9uWIDC9TCxSMlo2OU1TW0aZPywKAhiACFiQhZSPABPBCIwWQQoAC8aUp95YgruoVIQCBAAIy5FVCNidcd0bqM8Ob31o6EhAF5r5QA6ZEAVLsABheQj5EBS8cADUeRAHB7ALsDyEA8D3IQAdS4AM9sAvKvIQCVNYAazrUAEVMHgzAAGACcABp3ugMQBWXS3IQIWRdZCyABueXOICOAC5kIASRrBgBmxwA2C8hABdNgAgJ5CABDbAClN726yEAJ02AFrG1EEEKwYNAJsh0pwILohHwBEgzAA+cqBYLEJnEAAexBg5C63TWRDwXWAqgAUrINv4AEzopTqkAKqBUtaKfVBEJXIOG3X6ypMkDAYCCUjpRgaADyPAA0nZkEiAKp0XOZx3J7MOaRFXEAFRoAFtrl6hD7oP6KZGikIW+ozBGFgFg0bkM5OCMYMhkxnVIAdDsAN3PIQCAY4BYwcAKmvIQAiY4AZjvVCgbfoD8z8-kqoe7BpCXb3vaZAEkEGY9lXgkNkCZKOYrDZAJGTgB2h5CAQAnAJVjbaPXtOx1TVBAgJk7WIYA6DNC0ulINRAFQJwBBgeQQBFccAV6bkDMZBABZuwABycAB9HkEADJn4Q3LRfSbQNAMNK5bmQN1HnaTpiDMXp+gQBDABOhwAKZeQQAEGvwkFkCI5BABCewAfZcAQc6STDE89SPfJuiZYByE4Qg6BpJAnVkcgwAQEBKAYCAwCGd1PW9Kid0jZZbN1OlGWQLYICIK9OBoCBdP0wzjKQMyLLrLdqMffZ6WWRzumA2ymVleVFRSYhnHUsgYJgKCEuQAB6ZByygKtiD0iAVkoxsd0iq4yQpak8hi0Uvl+ISmQcfYzOQa0YAAa1kZxnGQQAKrsAHZbkEAEAnAA01wxkMAHYXkEAAZ7AF6awABceQKdkEqQAF0eQQAJUZGwANVcAGJrkEAF57ABcJwAKFpK4KbKU5YbjuABmR5cMAREnuWQQAPcaefrEUAEqHAAB5wAQSek0S5zUdB8XRN1cXBjF7uhiGABZiWuUlyUUGraHk4hsXbJkPh+ZBnvWwAR5scFwUAABTdCnkAAahW6dKkAGc7AB5x8dDEAEN7AAaB5BAF92gB2wAFBf5wAACcABEbgcAEjHJMACA7ABdxwANQbw16Qfou4EceD5CMABprkEAV57ABtakSWpgCY4H4NYoCVVREMAS1XAEZB-XAAWx5HUeqmlaEi5qjhOZBABxBwARPp+5AUP1o213rayKQqq7mxuw892UhywqckgjIgQgeBILrVHVSLopu2KJniq2EBHNNLqjxQKoAxOosUxOiiZZx9iIbMEEHUZUu0iBOFUZxxirK8FBNa51C4CAjmGLvSGH00rLKuPG6qdsC7rplyA7odu7A9QoFVZA7gAbWdV0PSUXFT4sqHkHuO+AF1K8Xmjl4TxZ93rurTXNS1iBNs2oAWwStaVyhBDCqE3p3dKpAtK733mqWu78k46i9jwbM6BI7P1ChcCKKcoqniQSpdqNpCC8FkFWKsnRy5P23NHPBlU0aUg9ruQhTJAA6s4AUIn6qAE3mwADHVLneoAR2afoaAnlPbes8uLz2QIARhrAAHQyuVc4DXiHGOHgZAnCQ4O2dhRWOL9CFAA)
 ![[Pasted image 20260818164414.png]]
+
 #### 4. Scenario 4: 네트워크 분할(Split-Brain 방지) 및 클러스터 재수렴 흐름
 
 ##### 1) 개요 및 사전 조건
@@ -1827,8 +1865,10 @@ DD-01부터 DD-07까지의 의사결정은 개별 문제 영역에 따라 독립
    - Node 1은 미커밋 로그를 롤백하고 Node 2의 최신 커밋 로그를 복제받아 클러스터 전체가 단일 리더 체제로 정합성을 복원합니다.
 
 ##### 4) Sequence Diagram
+
 [원본링크](https://sequencediagram.org/index.html#initialData=C4S2BsFMAJBJGwOpcDNjgbBeoEN7AGqwCgMoAdwwBaAIQCcBDEAO2kEoewAcmBKaQeB7pAXBcBv2wEqHAGReiAa8cAYQ4BYO6LgDGkahTIgA9tAAsTAFBq8c0JJBbqwaACIAwoRmGAgngIhJFUAupHoFAM7QzIC5u129FAbGAHIKACYwAIwSAAp+jrSWTAA61ADagDa10AAykBQRZNAA9NCAMYPCgDDL0JGAAM0Aui7u0KERkb5kOgFBRi0wAEyx8Yq0JCnpgAdDgDu1OXkFxdCAJ02V0H31jR69fe2d+oY94TAAzIMdYMPQo6lpAGIK4OAKAO6QhSVLVasNrhsHhxoAvP9qgA6OBIVCYaCAHB7ALsDEmCkGAjwUZAA1tA4qcEkxAWpqApgDAFAA3F7NA6RAA0mwAXNBADzdgBrOsEoaA8QAg44ANOeggFLxwAGo9CYVdMaAEtBLHTetU6tAADxEBXQQAXTYAICegCqIAD5oGkRWcnBdJQcVpTyRFoIc6gCgX1QeUqoAHkcADHXQQAUM0qJPhCMBSJQaPRmBIAIqWHBEAAMh1NABFoxHIjj-movBYtb1InS3ABXABGAFswAApBQ5rDFnMAfUO4fDLDSABUXnnpWoKJJQMSHDB0632yBO4TPOYDGp02mKXSKDYZGFsgoAOZlktVmumxtkPP-BOjilEAAetPF0+oYQAogZ5JA3EvK9XazrVdBAATjgBOhq1jg+-OnWPAz8-AS9r3LFd7zSR9XytfFBxJMl0zpIMsxRLNm0ARXHAFem6BAA-uwAbpokSIimOQAdFegQBYtcAXZaxkAE7nAGge6BAAjewAAGvVbVABSxwBamegQAXnsADU6ihfQAKZegQAMHsADTWd1aBVNRTAw6VPMgyBReYACVIAARyzK9gBiGcaHnNQIjbDsuzNSA2n0vI+wHGBpOANQgA)
 ![[Pasted image 20260818164951.png]]
+
 [원본링크](https://sequencediagram.org/index.html#initialData=C4S2BsFMAJBJGwOpcDNjgbBeoEN7AGqwCgMoAdwwBaAIQCcBDEAO2kEoewAcmBKaQeB7pAXBcBv2wEqHAGReiAa8cAYQ4BYO6LgDGkahTIgA9tAAsTAFBq8c0JJBbqwaACIAwoRmGAgngIhJFUAupHoFAM7QzIC5u129FAbGAHIKACYwAIwSAAp+jrSWTAA61ADagDa10AAykBQRZNAA9NCAMYPCgDDL0JGAAM0Aui7u0KERkb5kOgFBRi0wAEyx8Yq0JCnpgAdDgDu1OXkFxdCAJ02V0H31jR69fe2d+oY94TAAzIMdYMPQo6lpAGIK4OAKAO6QhSVLVasNrhsHhxpqAF4AdBDgA6RbLKbQQA1nYAVZuggAJBwA5s2xoIBUCcAgwPQQAZM9CJABFSw4IgABgArAAaaAAEWppMiTCBagoklAADcHDBNmpNkQAHybABc0AAEnkOgAjPKGQADC4AQ8cAIqOAYbHoIAEGoY0H5nkCYRAYU50EAIBOAF3GJAAVF4AWwBfXUvIFv2FACVIABHACukDcwAAagpgJAsBayNa+lT7NRdfqAwBJMIA-YRPpGdQs9kG3p-TNEflC6Bs-2QADilAMkHjwDInvNVpt6giaZAHIDzV+agbrKbnIoADMA4VudRC9AFGyXq2k8LAD81gAwe4QSPpFQ4sfHuhRVy3QQCxa4Bdls1fOgwc3AyhuXy48AnUOASpqNF4LLmDn1hW53RLLWAAFIKCVYL8SgD6hwkgy0BpEeKx1MynbNlyj5QemLZ3gYPKPg+ESHMK1h4DIYQAKIGPIXq-t+gHAVSR51vBXYtpmKHoTmDqTtAWE4fhlbeG4LpuHgThuIGODupI0huG4AKVp69Z5NBGZtkOLajuOearuu7qblgi62tAgCWq4AGuPQIAN02AIyD+6eAolrvoYABkzE2OAACe0CACJjgAzHXRkB9AxSHAMKf4CW+YABmE0AAPIANLtlJCGwUmGgdlFnjmMhQIqOCCAoNAgCvPVk7DcPwQhiBIJhOGOZAAOYyNIjIAmockwApA4HJEFJ5mlqCADzdeKAIOdqBZU5zmxH0MTQIArYvjEIgA4NXaqGMZAkSYTYrEERxxEAUBTWHrWYbQFA55kHGCabCmVEwROs0aI2J2DsO9WnXN0AYoAIOMbSG6nQAeIHqiZZ5zIAMbWADqr0CADfLgAMdRItz3E846AKg1gCPLWMgAf3YAJ3OANA90CACuj8DQitpEkiwgAmHYAjD2or0KzQIAOrNjYAOh2AB+1mWADgTbmRAxeYsZGbGEZxXo8dQfG4IJwmieJkCSRdMmtLFkXUXkfaKXBtUjiVt3NY6nC8AIhqAC0zgAANadKxBlaKwsIAF02AD7jMLwhrdOU+iWnGRlgALY31QA)
 ![[Pasted image 20260818165033.png]]
 
