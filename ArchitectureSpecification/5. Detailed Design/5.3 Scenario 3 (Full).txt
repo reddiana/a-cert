@@ -1,4 +1,4 @@
-title Scenario 3: 일반 노드 장애 감지, 멤버십 자가 치유 및 Pod 재기동 재합류 흐름
+title Scenario 3 (Full): 일반 노드 장애 감지, 멤버십 자가 치유 및 Pod 재기동 재합류 흐름
 participant "Node 1 (Leader)\nConsensusEngine" as N1
 participant "Node 1\nMulti-FSM" as FSM1
 participant "Node 2 (Follower)\nConsensusEngine + WAL" as N2

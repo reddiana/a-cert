@@ -1,0 +1,32 @@
+title Scenario 2 (간략): 리더 노드 장애 감지, 신규 리더 선출 및 고립 작업 복구 흐름
+participant "Node 1 (구 Leader)\n[Crash]" as N1
+participant "Node 2 (신규 Leader)\nRaft + Multi-FSM + RecoveryCoordinator" as N2
+participant "Node 3 (Follower)\nRaft + BatchLauncher" as N3
+participant "Execution Target\n(ns-batch Pod)" as Target
+
+note over N1: T0: Node 1 Crash (exec-101 추적 중)
+N1-xN2: Heartbeat 중단
+N1-xN3: Heartbeat 중단
+
+note over N2,N3: 1. 리더 부재 감지 및 신규 리더 선출 (감지 ≤ 2s)
+N2->N3: PreVote → RequestVote (로그 최신성 검사)
+N3-->N2: 투표 승인 (2/3)
+N2->N3: NO_OP 복제·커밋 (이전 term 엔트리 확정)
+note over N2: T0+≤3s: 신규 리더 서비스 개시 (QAS-05)
+N2->N3: MEMBER_STATUS(node-1=DEAD) 복제·커밋
+N3->N2: 실패 요청 재시도 (leaderHint=node-2, 동일 requestId)
+
+note over N2,Target: 2. 고립 작업 판정 및 복구 (승격 후 ≤ 10s, QAS-06)
+N2->N2: 미완료 실행 조회\nexec-101: 추적 노드 DEAD → 복구 대상\nexec-102: 추적 노드 ALIVE → 조치 없음
+N2->Target: getExecutionStatus(exec-101)
+alt Target = RUNNING
+Target-->N2: RUNNING
+N2->N3: QUEUE_REASSIGN 복제·커밋 → 재실행 없이 추적 인수
+else Target = FAILED / NOT_FOUND
+Target-->N2: NOT_FOUND
+N2->N3: QUEUE_REQUEUE(front) 복제·커밋 → 재적재 후 재실행
+else Target = COMPLETED
+Target-->N2: COMPLETED
+N2->N3: JOURNAL_RECORD(COMPLETED) + QUEUE_ACK 복제·커밋
+end
+note over N2: 구 실행분의 뒤늦은 보고(구 leaseToken)는 FSM에서 거부 (Fencing)

@@ -1,4 +1,4 @@
-title Scenario 1: 정상 상태 분산 배치 스케줄링 및 Multi-FSM 실행 흐름
+title Scenario 1 (Full): 정상 상태 분산 배치 스케줄링 및 Multi-FSM 실행 흐름
 actor "Timer\n(Schedule)" as Timer
 participant "Node 1\nScheduler Core" as Sched
 participant "Node 1 (Leader)\nCluster API + ConsensusEngine" as N1

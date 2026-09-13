@@ -1,4 +1,4 @@
-title Scenario 2: 리더 노드 장애 감지, 신규 리더 선출 및 고립 작업 복구 흐름
+title Scenario 2 (Full): 리더 노드 장애 감지, 신규 리더 선출 및 고립 작업 복구 흐름
 participant "Node 1 (구 Leader)\n[Crash]" as N1
 participant "Node 2 (Candidate → Leader)\nConsensusEngine" as N2
 participant "Node 2\nRaftLogManager (WAL)" as WAL2

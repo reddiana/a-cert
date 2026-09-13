@@ -1,4 +1,4 @@
-title Scenario 4: 메타 DB 장기 장애 격리 및 복구 시 Reconciliation 동기화 흐름
+title Scenario 4 (Full): 메타 DB 장기 장애 격리 및 복구 시 Reconciliation 동기화 흐름
 participant "Scheduler Core /\nBatchLauncher" as Client
 participant "Node 1 (Leader)\nCluster API + ConsensusEngine" as N1
 participant "Node 2, 3 (Follower)\nConsensusEngine + WAL" as Peers

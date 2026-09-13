@@ -1,0 +1,30 @@
+title Scenario 4 (간략): 메타 DB 장기 장애 격리 및 복구 시 Reconciliation 동기화 흐름
+participant "Scheduler Core /\nBatchLauncher" as Client
+participant "Node 1 (Leader)\nRaft + WAL + Multi-FSM" as N1
+participant "Node 2·3 (Follower)\nRaft + WAL" as Peers
+participant "Node 1 (Leader)\nWriteBehindSynchronizer" as WB
+database "Meta RDBMS" as DB
+
+note over DB: T0: Meta RDBMS 장애
+WB->DB: 커밋 구간 일괄 반영 시도
+DB-xWB: SQLException
+WB->WB: 상태 = DB_DOWN, backoff 재시도\n미반영 구간 WAL 보존 (압축 하한 고정)
+
+note over Client,Peers: 1. DB 장애 중 무중단 처리 (QAS-09 중단 시간 0초)
+loop DB 장애 기간
+Client->N1: lock / enqueue / dequeue / journal 요청
+N1->Peers: 복제·커밋 (처리 경로에 DB I/O 없음)
+N1-->Client: OK
+end
+
+note over DB: T1: Meta RDBMS 복구
+note over WB,DB: 2. Reconciliation (복구 후 ≤ 30s)
+WB->DB: 헬스체크 성공 → 상태 = RECONCILING
+WB->DB: DB 체크포인트 조회 (재개 기준점)
+loop 500건 단위, log_index 오름차순
+WB->DB: 이력 INSERT + 체크포인트 갱신 (단일 트랜잭션, log_index 멱등)
+end
+WB->N1: SYNC_CHECKPOINT 제안
+N1->Peers: 복제·커밋 → 전 노드 압축 하한 동기화
+note over WB: 미동기화 0건 → 상태 = NORMAL
+note over WB,DB: 동기화 중 리더 교체 시 신규 리더가 DB 체크포인트부터 재개\n(겹치는 구간은 UNIQUE log_index로 중복 제거)

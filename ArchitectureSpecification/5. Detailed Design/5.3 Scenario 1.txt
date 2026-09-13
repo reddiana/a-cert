@@ -1,0 +1,35 @@
+title Scenario 1 (간략): 정상 상태 분산 배치 스케줄링 및 Multi-FSM 실행 흐름
+actor "Timer\n(Schedule)" as Timer
+participant "Node 1 (Leader)\nScheduler Core + Raft + Multi-FSM" as N1
+participant "Node 2·3 (Follower)\nRaft + WAL" as F
+participant "Node 2\nBatchLauncher" as L2
+participant "Execution Target\n(ns-batch Pod)" as Target
+database "Meta RDBMS" as DB
+
+note over N1,F: 모든 상태 변경 명령은 Raft 커밋 후 FSM apply 결과만 반환\n(WAL fsync → 과반수 응답 → commit → apply)
+
+note over Timer,F: 1. DAG 선후행 판정 (분산 락 임계 구역)
+Timer->N1: trigger(workflow="wf-001")
+N1->F: LOCK_ACQUIRE 복제·커밋
+note over N1: fenceToken 발급 → 로컬 FSM으로 선행 작업 완료 판정\n→ 후행 Job_101 적재 결정 (QAS-01)
+N1->F: QUEUE_ENQUEUE(Job_101), LOCK_RELEASE 복제·커밋
+
+note over N1,L2: 2. 분산 큐 인출 (팔로워 노드 요청은 리더로 전달)
+L2->N1: poll() → QUEUE_DEQUEUE
+N1->F: 복제·커밋 (동시 요청은 Group Commit)
+N1-->L2: Job_101, leaseToken (QAS-02)
+
+note over L2,Target: 3. 실행 위임 및 저널링
+L2->Target: launch(exec-101, leaseToken)
+L2->N1: JOURNAL_RECORD(exec-101 RUNNING)
+N1->F: 복제·커밋
+
+note over L2,Target: 4. 작업 완료 처리
+Target-->L2: EXITED(exitCode=0)
+L2->N1: JOURNAL_RECORD(COMPLETED) + QUEUE_ACK
+N1->F: 복제·커밋
+N1->N1: 후행 DAG 판정 (1단계 반복)
+
+note over N1,DB: 5. Write-Behind 비동기 반영 (리더 전용)
+N1->DB: 커밋 구간 일괄 INSERT + 체크포인트 갱신 (log_index 멱등)
+DB-->N1: COMMIT OK

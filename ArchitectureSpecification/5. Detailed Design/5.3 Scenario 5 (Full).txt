@@ -1,4 +1,4 @@
-title Scenario 5: 네트워크 분할(Split-Brain 방지) 및 클러스터 재수렴 흐름
+title Scenario 5 (Full): 네트워크 분할(Split-Brain 방지) 및 클러스터 재수렴 흐름
 participant "Node 1\nScheduler Core / BatchLauncher" as C1
 participant "Node 1 (Partition A)\n[구 Leader, Term=1]" as N1
 participant "Node 2 (Partition B)\n[신규 Leader, Term=2]" as N2

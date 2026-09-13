@@ -1,0 +1,30 @@
+title Scenario 5 (간략): 네트워크 분할(Split-Brain 방지) 및 클러스터 재수렴 흐름
+participant "Node 1\nScheduler / BatchLauncher" as C1
+participant "Node 1 (Partition A)\n[구 Leader]" as N1
+participant "Node 2 (Partition B)\n[신규 Leader]" as N2
+participant "Node 3 (Partition B)\n[Follower]" as N3
+participant "Node 2\nScheduler / BatchLauncher" as C2
+
+note over N1,N3: T0: 네트워크 분할 — Partition A {Node 1} / Partition B {Node 2, Node 3}
+
+note over C1,N1: 1. 소수파: 커밋 불가
+C1->N1: poll() → QUEUE_DEQUEUE
+N1-xN2: AppendEntries (전달 불가)
+note over N1: 과반수 응답 없음 → 미커밋 → 작업 미인출
+N1-->C1: TIMEOUT
+note over N1: Check-Quorum → FOLLOWER 강등\n이후 조회·쓰기 거부 (NOT_LEADER)
+
+note over N2,N3: 2. 다수파: 신규 리더 선출 및 정상 쓰기
+N2->N3: PreVote → RequestVote
+N3-->N2: 투표 승인 (2/3)
+N2->N3: NO_OP + MEMBER_STATUS(node-1=DEAD) 복제·커밋
+C2->N2: offer(Job_501)
+N2->N3: 복제·커밋
+N2-->C2: OK
+note over N1: 고립 노드는 PreVote 과반 미획득 → term 유지\n(네트워크 복구 시 정상 리더 교란 방지)
+
+note over N1,N3: T1: 네트워크 복구 및 재수렴
+N2->N1: AppendEntries(term=2)
+N1->N1: 상위 term 수용, 미커밋 엔트리 절단 후 리더 로그로 대체
+N1-->N2: AppendResponse(success=true)
+note over N1,N3: 활성 리더 1개 유지 (QAS-03), 3노드 로그·FSM 일치
