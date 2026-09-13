@@ -1,0 +1,11 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+out/
+
+# Local WAL data (batch.cluster.wal-dir default)
+data/
