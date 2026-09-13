@@ -10,3 +10,4 @@
 .obsidian/bookmarks.json
 .obsidian/**/data.json
 ~*
+.export/
