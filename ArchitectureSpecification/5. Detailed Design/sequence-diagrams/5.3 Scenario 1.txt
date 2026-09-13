@@ -1,0 +1,107 @@
+title Scenario 1: 정상 상태 분산 배치 스케줄링 및 Multi-FSM 실행 흐름
+actor "Timer\n(Schedule)" as Timer
+participant "Node 1\nScheduler Core" as Sched
+participant "Node 1 (Leader)\nCluster API + ConsensusEngine" as N1
+participant "Node 1\nRaftLogManager (WAL)" as WAL1
+participant "Node 1\nMulti-FSM" as FSM1
+participant "Node 2 (Follower)\nConsensusEngine + WAL" as N2
+participant "Node 3 (Follower)\nConsensusEngine + WAL" as N3
+participant "Node 2\nBatchLauncher + Cluster API" as L2
+participant "Execution Target\n(ns-batch Pod)" as Target
+participant "Node 1 (Leader)\nWriteBehindSynchronizer" as WB
+database "Meta RDBMS" as DB
+
+note over Sched,N3: 1. DAG 선후행 판정 임계 구역 (분산 락: 판정·적재 구간만 보유)
+Timer->Sched: trigger(workflow="wf-001")
+Sched->N1: lock.execute(key="dag:wf-001",\nowner="node-1:trg-7781", leaseMs=5000)
+N1->WAL1: append(index=101, term=1, LOCK_ACQUIRE) + fsync
+WAL1-->N1: persisted
+par Parallel Replication
+N1->N2: AppendEntries(term=1, prevLogIndex=100, prevLogTerm=1,\nentries=[101], leaderCommit=100)
+else
+N1->N3: AppendEntries(term=1, prevLogIndex=100, prevLogTerm=1,\nentries=[101], leaderCommit=100)
+end
+N2->N2: prevLog(100, term 1) 일치 확인\nappend + fsync
+N2-->N1: AppendResponse(term=1, success=true, matchIndex=101)
+N1->N1: 과반수(2/3) matchIndex ≥ 101\n&& log[101].term == currentTerm\n→ commitIndex = 101
+N1->FSM1: apply(101) LOCK_ACQUIRE
+FSM1-->N1: GRANTED(fenceToken=101, expireAt=proposedAt+5000)
+N3-->N1: AppendResponse(term=1, success=true, matchIndex=101)
+N1-->Sched: LockGranted(fenceToken=101)
+Sched->FSM1: 로컬 FSM 조회 (lastApplied ≥ fenceToken=101 확인 후)\n(a) Task A 저널 상태 (b) Task B 대기열·in-flight·실행 기록
+FSM1-->Sched: (a) Task A = COMPLETED\n(b) Task B 미적재·미실행
+note over Sched: [임계 구역] 판정 원천 = 로컬 FSM\n(메타 DB는 Write-Behind 지연 반영이므로 미사용)\n→ 후행 Task B 적재 결정
+Sched->N1: queue.offer(QUEUE_ENQUEUE jobId="Job_101")\n(Job_101 = wf-001:taskB:{scheduledTime})
+note over N1,N3: index=102 복제·커밋 (index=101과 동일 절차)
+N1->FSM1: apply(102) → 대기열 적재
+N1-->Sched: OK
+Sched->N1: lock.release(key="dag:wf-001", fenceToken=101)
+note over N1,N3: index=103 LOCK_RELEASE 복제·커밋
+N1-->Sched: Released
+note over Sched: 락 보유 구간 종료 (101..103)\n이후 인출·실행·모니터링·상태 기록은 락 없이 수행
+
+note over N1,L2: 2. 분산 큐 작업 인출 (커밋 후 apply 결과만 반환)
+L2->L2: poll(workerId="node-2", visibilityMs=30000)\n→ 로컬 노드 isLeader() == false
+L2->N1: ClientRequest(requestId="n2-5531", QUEUE_DEQUEUE)
+N1->WAL1: append(index=104, QUEUE_DEQUEUE) + fsync
+par Parallel Replication
+N1->N2: AppendEntries(prevLogIndex=103, entries=[104], leaderCommit=103)
+else
+N1->N3: AppendEntries(prevLogIndex=103, entries=[104], leaderCommit=103)
+end
+N2-->N1: AppendResponse(success=true, matchIndex=104)
+N1->N1: commitIndex = 104
+N1->FSM1: apply(104) QUEUE_DEQUEUE
+FSM1->FSM1: head = "Job_101" → in-flight 등록\n{worker=node-2, deadline=proposedAt+30s, leaseToken=104}
+FSM1-->N1: DEQUEUED(jobId="Job_101", leaseToken=104)
+N1-->L2: ClientResponse(OK, "Job_101", leaseToken=104)
+note over N1,N3: 동시 인출 요청은 Group Commit(≤2ms 또는 64건)으로\n1회 fsync · 1회 AppendEntries에 묶어 처리 (QAS-02)
+
+note over L2,Target: 3. 실행 위임 및 저널링 (락 미보유: in-flight lease + leaseToken 펜싱)
+L2->Target: launch(executionId="exec-101", jobId="Job_101", leaseToken=104)
+Target-->L2: STARTED
+L2->N1: ClientRequest(JOURNAL_RECORD exec-101 RUNNING,\nexecutorNode=node-2, leaseToken=104)
+note over N1,N3: index=105 복제·커밋 → Journal FSM: exec-101 = RUNNING
+N1-->L2: ClientResponse(OK)
+opt 실행 시간이 lease 갱신 주기(10초)를 초과하는 경우
+L2->N1: ClientRequest(QUEUE_RENEW Job_101, leaseToken=104)
+note over N1,N3: 복제·커밋 → Queue FSM 토큰 비교 (갱신 엔트리 인덱스 표기 생략)
+alt leaseToken 일치
+N1-->L2: ClientResponse(OK) → deadline 연장
+else leaseToken 불일치 (재할당·재적재됨)
+N1-->L2: ClientResponse(REJECTED)
+L2->L2: 소유권 상실 → 상태 보고 중단\n(이후 처리는 RecoveryCoordinator가 판정, Scenario 2)
+end
+end
+
+note over L2,Target: 4. 작업 완료 처리
+Target-->L2: EXITED(exitCode=0)
+L2->N1: ClientRequest(JOURNAL_RECORD exec-101 COMPLETED,\nQUEUE_ACK Job_101, leaseToken=104)
+N1->WAL1: append(index=106..107) + fsync
+par Parallel Replication
+N1->N2: AppendEntries(prevLogIndex=105, entries=[106, 107])
+else
+N1->N3: AppendEntries(prevLogIndex=105, entries=[106, 107])
+end
+N3-->N1: AppendResponse(success=true, matchIndex=107)
+N1->N1: commitIndex = 107
+N1->FSM1: apply(106..107) → exec-101 = COMPLETED, in-flight 제거
+N1-->L2: ClientResponse(OK)
+FSM1-->Sched: onTaskCompleted("Job_101") → 후행 DAG 판정 (1단계 반복)
+par Heartbeat (500ms)
+N1->N2: AppendEntries(entries=[], leaderCommit=107)
+else
+N1->N3: AppendEntries(entries=[], leaderCommit=107)
+end
+note over N2,N3: leaderCommit까지 각자 FSM apply → 3노드 상태 수렴
+
+note over WB,DB: 5. Write-Behind 비동기 RDBMS 반영 (리더 전용 백그라운드 스레드)
+FSM1->WB: onApplied(lastAppliedIndex=107) [링버퍼: 인덱스만 전달]
+opt 200ms 주기 또는 500건 누적
+WB->WAL1: readCommitted(fromIndex=101, toIndex=107)
+WAL1-->WB: entries[101..107]
+WB->DB: BEGIN\nINSERT INTO batch_journal_log (log_index, term, type, payload, ...)\n(중복 log_index 무시)\nUPDATE batch_sync_checkpoint SET last_log_index=107\nCOMMIT
+DB-->WB: COMMIT OK
+WB->WAL1: setCompactionFloor(107)
+WB->N1: propose(SYNC_CHECKPOINT lastDbSyncedIndex=107) [주기적]
+end

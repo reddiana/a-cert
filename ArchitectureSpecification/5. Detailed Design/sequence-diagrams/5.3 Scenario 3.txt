@@ -1,0 +1,55 @@
+title Scenario 3: 일반 노드 장애 감지, 멤버십 자가 치유 및 Pod 재기동 재합류 흐름
+participant "Node 1 (Leader)\nConsensusEngine" as N1
+participant "Node 1\nMulti-FSM" as FSM1
+participant "Node 2 (Follower)\nConsensusEngine + WAL" as N2
+participant "Node 3 (Follower)\nbatch-scheduler-2" as N3
+participant "K8s StatefulSet\nController" as K8s
+participant "PVC\nwal-storage-batch-scheduler-2" as PVC
+
+note over N3: T0: Node 3 Crash (matchIndex=200)
+loop Heartbeat 500ms 주기
+N1->N2: AppendEntries(entries=[], leaderCommit)
+N2-->N1: AppendResponse(success=true) → lastAck[node-2] 갱신
+N1-xN3: AppendEntries (응답 없음)
+end
+note over N1: T0+2.0s: now - lastAck[node-3] ≥ 2,000ms\n→ node-3 DEAD 판정 (QAS-04 감지 ≤ 2s)
+N1->N2: AppendEntries(index=201, MEMBER_STATUS node-3=DEAD)
+N2-->N1: AppendResponse(success=true, matchIndex=201)
+N1->N1: commitIndex = 201 (Quorum 2/3, 분모 3 유지)
+N1->FSM1: apply(201) → activeMembers = [node-1, node-2]
+N1->N2: AppendEntries(entries=[], leaderCommit=201)
+note over N1,N2: T0+≤3.0s: 멤버십 자가 치유 완료 (QAS-04)
+note over FSM1: node-3 추적 작업 → Scenario 2 고립 작업 판정 적용\nnode-3 작업 분배 대상 제외
+
+note over N1,N2: Node 3 부재 중에도 index 202..230 정상 커밋
+K8s->N3: Pod 재생성 (동일 식별자 batch-scheduler-2)
+K8s->PVC: 기존 PVC 재마운트 (/var/data/batch/wal)
+N3->PVC: 최신 Snapshot 로드 (lastIncludedIndex=150)
+N3->PVC: WAL segment Replay (151..200), HardState 복원
+N3->N3: FSM 복원, role = FOLLOWER\nReadiness = false (따라잡기 전)
+
+N1->N3: AppendEntries(term=1, prevLogIndex=200, prevLogTerm=1,\nentries=[201..230], leaderCommit=230)
+alt prevLog 일치
+N3->PVC: append + fsync (201..230)
+N3-->N1: AppendResponse(success=true, matchIndex=230)
+else WAL 꼬리 불일치 또는 유실
+N3-->N1: AppendResponse(success=false, conflictIndex=191)
+N1->N3: AppendEntries(prevLogIndex=190, entries=[191..230])
+N3-->N1: AppendResponse(success=true, matchIndex=230)
+else nextIndex가 리더 압축 하한 이전
+N1->N3: InstallSnapshot(lastIncludedIndex=220, lastIncludedTerm=1, data)
+N3-->N1: SnapshotResponse(success=true)
+N1->N3: AppendEntries(prevLogIndex=220, entries=[221..230])
+N3-->N1: AppendResponse(success=true, matchIndex=230)
+end
+N3->N3: applyUpTo(230)
+N1->N1: matchIndex[node-3] ≥ commitIndex → 따라잡기 완료
+par Parallel Replication
+N1->N2: AppendEntries(index=231, MEMBER_STATUS node-3=ALIVE)
+else
+N1->N3: AppendEntries(index=231, MEMBER_STATUS node-3=ALIVE)
+end
+N2-->N1: AppendResponse(success=true, matchIndex=231)
+N1->FSM1: apply(231) → activeMembers = [node-1, node-2, node-3]
+N3->N3: apply(231) → Readiness = true
+note over N1,N3: node-3 작업 분배 대상 복귀

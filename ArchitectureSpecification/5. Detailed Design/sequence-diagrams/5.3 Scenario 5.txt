@@ -1,0 +1,55 @@
+title Scenario 5: 네트워크 분할(Split-Brain 방지) 및 클러스터 재수렴 흐름
+participant "Node 1\nScheduler Core / BatchLauncher" as C1
+participant "Node 1 (Partition A)\n[구 Leader, Term=1]" as N1
+participant "Node 2 (Partition B)\n[신규 Leader, Term=2]" as N2
+participant "Node 3 (Partition B)\n[Follower]" as N3
+participant "Node 2\nScheduler Core / BatchLauncher" as C2
+
+note over N1,N3: T0: 네트워크 분할 — Partition A {Node 1} / Partition B {Node 2, Node 3}\n(분할 직전 commitIndex = 400)
+
+note over C1,N1: 1. 소수파: 커밋 불가 → 인출·디스패치 불가
+C1->N1: queue.poll() → QUEUE_DEQUEUE
+N1->N1: append(index=401, term=1) + fsync
+N1-xN2: AppendEntries(term=1, prevLogIndex=400, entries=[401])
+N1-xN3: AppendEntries(term=1, prevLogIndex=400, entries=[401])
+note over N1: 과반수 ACK 없음 → 미커밋 → FSM 미적용\n(작업이 인출되지 않음)
+N1-->C1: ClientResponse(TIMEOUT) [2,000ms]
+note over N1: T0+≤2s: Check-Quorum\nElection Timeout 동안 과반수 응답 없음 → FOLLOWER 강등
+C1->N1: lock 조회 / poll() 재시도
+N1-->C1: NOT_LEADER(leaderHint=unknown)\n(ReadIndex 불가 → 조회·쓰기 모두 거부)
+note over C1: exec-301 lease 갱신 불가\n→ 다수파 리더가 Scenario 2 절차로 판정
+
+note over N2,N3: 2. 다수파: 신규 리더 선출 및 정상 쓰기
+N2->N3: PreVote(term=2, lastLogIndex=400, lastLogTerm=1)
+N3-->N2: PreVoteResponse(granted=true)
+N2->N2: HardState{term=2, votedFor=node-2} fsync
+N2->N3: RequestVote(term=2, lastLogIndex=400, lastLogTerm=1)
+N3->N3: HardState{term=2, votedFor=node-2} fsync
+N3-->N2: VoteResponse(term=2, voteGranted=true)
+N2->N2: role = LEADER (term=2)
+N2->N3: AppendEntries(term=2, prevLogIndex=400, prevLogTerm=1,\nentries=[401 NO_OP, 402 MEMBER_STATUS node-1=DEAD])
+N3-->N2: AppendResponse(success=true, matchIndex=402)
+N2->N2: commitIndex = 402
+C2->N2: queue.offer("Job_501")
+N2->N3: AppendEntries(prevLogIndex=402, prevLogTerm=2,\nentries=[403 QUEUE_ENQUEUE Job_501])
+N3-->N2: AppendResponse(success=true, matchIndex=403)
+N2->N2: commitIndex = 403 → apply
+N2-->C2: OK
+
+note over N1: 3. 고립 노드의 term 인플레이션 방지
+N1-xN2: PreVote(term=2) [차단]
+N1-xN3: PreVote(term=2) [차단]
+note over N1: PreVote 과반 미획득 → currentTerm = 1 유지\n(복구 시 정상 리더 교란 방지)
+
+note over N1,N3: T1: 네트워크 복구 및 재수렴
+N2->N1: AppendEntries(term=2, leaderId=node-2, prevLogIndex=400, prevLogTerm=1,\nentries=[401..403], leaderCommit=403)
+N1->N1: term 2 > 1 → HardState{term=2} fsync, FOLLOWER 유지
+N1->N1: prevLog(400, term 1) 일치 확인\nindex 401 term 충돌(1 ≠ 2) → 401 이후 절단\n(미커밋 QUEUE_DEQUEUE 폐기, 클라이언트는 이미 TIMEOUT 수신)
+N1->N1: append 401..403 + fsync → applyUpTo(403)
+N1-->N2: AppendResponse(term=2, success=true, matchIndex=403)
+par Parallel Replication
+N2->N1: AppendEntries(index=404, MEMBER_STATUS node-1=ALIVE)
+else
+N2->N3: AppendEntries(index=404, MEMBER_STATUS node-1=ALIVE)
+end
+note over N1,N3: 단일 리더(Node 2, Term 2)로 수렴, 3노드 로그·FSM 상태 일치

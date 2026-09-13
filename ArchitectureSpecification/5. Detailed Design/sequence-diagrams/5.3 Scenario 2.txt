@@ -1,0 +1,62 @@
+title Scenario 2: 리더 노드 장애 감지, 신규 리더 선출 및 고립 작업 복구 흐름
+participant "Node 1 (구 Leader)\n[Crash]" as N1
+participant "Node 2 (Candidate → Leader)\nConsensusEngine" as N2
+participant "Node 2\nRaftLogManager (WAL)" as WAL2
+participant "Node 2\nMulti-FSM" as FSM2
+participant "Node 2\nRecoveryCoordinator" as RC
+participant "Node 3 (Follower)\nConsensusEngine + WAL" as N3
+participant "Node 3\nBatchLauncher" as L3
+participant "Execution Target\n(ns-batch Pod)" as Target
+
+note over N1: T0: Node 1 Crash\n(exec-101 추적 중, commitIndex=107)
+N1-xN2: Heartbeat 중단
+N1-xN3: Heartbeat 중단
+
+note over N2: T0+1.62s: Election Timeout 만료\n(1,500~2,000ms 난수)
+N2->N3: PreVote(term=2, lastLogIndex=107, lastLogTerm=1)
+N3->N3: 최소 Election Timeout(1.5s) 동안 리더 미수신\n&& 후보 로그 최신성 충족
+N3-->N2: PreVoteResponse(granted=true)
+N2->WAL2: HardState{currentTerm=2, votedFor=node-2} fsync
+N2->N3: RequestVote(term=2, candidateId=node-2,\nlastLogIndex=107, lastLogTerm=1)
+N3->N3: term 2 > 1, 미투표, 로그 최신성 충족\n→ HardState{term=2, votedFor=node-2} fsync
+N3-->N2: VoteResponse(term=2, voteGranted=true)
+N2->N2: 2/3 득표 → role = LEADER\nnextIndex[*] = 108
+
+N2->WAL2: append(index=108, term=2, NO_OP) + fsync
+N2->N3: AppendEntries(term=2, prevLogIndex=107, prevLogTerm=1,\nentries=[108 NO_OP], leaderCommit=107)
+N3-->N2: AppendResponse(term=2, success=true, matchIndex=108)
+N2->N2: commitIndex = 108\n(현재 term 엔트리 커밋 → 이전 term 엔트리 확정)
+N2->FSM2: applyUpTo(108)
+note over N2: T0+≈1.8s: 신규 리더 서비스 개시 (QAS-05 ≤ 3s)
+
+note over N2: T0+2.0s: node-1 마지막 수신 후 2초 경과
+N2->N3: AppendEntries(index=109, MEMBER_STATUS node-1=DEAD)
+N3-->N2: AppendResponse(success=true, matchIndex=109)
+N2->FSM2: apply(109) → activeMembers = [node-2, node-3]
+L3->L3: 구 리더 대상 요청 실패(연결 끊김)\n→ leaderHint=node-2, 동일 requestId로 재시도
+
+note over RC,Target: 고립 작업 판정 및 복구 (리더 승격 후 10초 이내)
+N2->RC: onLeadershipAcquired(term=2)
+RC->FSM2: 미완료 실행 조회 (RUNNING 저널 + in-flight)
+FSM2-->RC: exec-101 {executor=node-1(DEAD), leaseToken=104}\nexec-102 {executor=node-3(ALIVE), lease 유효}
+note over RC: exec-102: 추적 노드 생존 → 조치 없음 (중복 실행 방지)
+RC->Target: getExecutionStatus("exec-101")
+alt Target = RUNNING (실행 Pod 생존, 추적 노드만 소실)
+Target-->RC: RUNNING
+RC->N2: propose(QUEUE_REASSIGN Job_101 → node-2,\nJOURNAL_RECORD exec-101 executorNode=node-2)
+note over N2,N3: index=110..111 복제·커밋\n→ 신규 leaseToken=110, 재실행 없이 추적 인수
+else Target = FAILED 또는 NOT_FOUND
+Target-->RC: NOT_FOUND
+RC->N2: propose(LOCK_EXPIRE (node-1 소유 락),\nJOURNAL_RECORD exec-101 PENDING,\nQUEUE_REQUEUE Job_101 front=true)
+note over N2,N3: index=110..112 복제·커밋\n→ Job_101 대기열 최우선 재적재
+L3->N2: ClientRequest(QUEUE_DEQUEUE workerId=node-3)
+note over N2,N3: index=113 복제·커밋 → leaseToken=113
+N2-->L3: ClientResponse(OK, "Job_101", leaseToken=113)
+L3->Target: launch(executionId="exec-101-r1", leaseToken=113)
+else Target = COMPLETED
+Target-->RC: COMPLETED
+RC->N2: propose(JOURNAL_RECORD exec-101 COMPLETED,\nQUEUE_ACK Job_101)
+note over N2,N3: 복제·커밋 → 완료 확정
+end
+note over RC: 고립 작업 복구 완료 (QAS-06 ≤ 10s)
+note over FSM2: 구 실행분의 뒤늦은 보고(leaseToken=104)는\n현재 토큰 불일치로 FSM에서 거부 (Fencing)

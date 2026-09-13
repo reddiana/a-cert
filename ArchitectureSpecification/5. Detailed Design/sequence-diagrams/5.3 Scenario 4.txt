@@ -1,0 +1,60 @@
+title Scenario 4: 메타 DB 장기 장애 격리 및 복구 시 Reconciliation 동기화 흐름
+participant "Scheduler Core /\nBatchLauncher" as Client
+participant "Node 1 (Leader)\nCluster API + ConsensusEngine" as N1
+participant "Node 2, 3 (Follower)\nConsensusEngine + WAL" as Peers
+participant "Node 1\nRaftLogManager (WAL)" as WAL1
+participant "Node 1 (Leader)\nWriteBehindSynchronizer" as WB
+database "Meta RDBMS" as DB
+participant "Node 2 (교체 리더)\nWriteBehindSynchronizer" as WB2
+
+note over DB: batch_sync_checkpoint.last_log_index = 300
+note over DB: T0: Meta RDBMS 장애 (네트워크 단절 / 인스턴스 다운)
+WB->DB: BEGIN; INSERT entries[301..320] ...
+DB-xWB: SQLException (Connection Timeout)
+WB->WB: ROLLBACK, 상태 = DB_DOWN\n재시도 backoff 1s→2s→4s→8s→10s(상한)
+WB->WAL1: compactionFloor 고정 = 300 (미반영 구간 WAL 보존)
+
+loop DB 장애 기간 (분산 락·큐·저널 무중단)
+Client->N1: lock / enqueue / dequeue / journal 요청
+N1->WAL1: append + fsync
+N1->Peers: AppendEntries
+Peers-->N1: AppendResponse(success=true)
+N1->N1: commit + Multi-FSM apply
+N1-->Client: OK (커밋·apply 결과)
+end
+note over N1: index 301..820 커밋 — 처리 경로에 DB I/O 없음\n(QAS-09 중단 시간 0초)
+note over N1: Readiness Probe에 DB Health 미포함\n→ 스케줄러 Pod 트래픽 유지
+
+loop backoff 주기 헬스체크
+WB->DB: SELECT 1
+DB-xWB: 실패
+end
+
+note over DB: T1: Meta RDBMS 복구
+WB->DB: SELECT 1
+DB-->WB: OK → 상태 = RECONCILING
+WB->DB: SELECT last_log_index FROM batch_sync_checkpoint
+DB-->WB: 300 (메모리가 아닌 DB 체크포인트 기준)
+loop 500건 단위 순차 Replay (log_index 오름차순, 301..800)
+WB->WAL1: readCommitted(fromIndex, toIndex)
+WAL1-->WB: entries[fromIndex..toIndex]
+WB->DB: BEGIN\nINSERT INTO batch_journal_log ... (중복 log_index 무시)\nUPDATE batch_sync_checkpoint SET last_log_index = toIndex\nCOMMIT
+DB-->WB: COMMIT OK
+WB->WAL1: setCompactionFloor(toIndex)
+end
+WB->WAL1: readCommitted(801, 820)
+WAL1-->WB: entries[801..820]
+WB->DB: BEGIN; INSERT ...; UPDATE checkpoint = 820; COMMIT
+DB-->WB: COMMIT OK
+WB->N1: propose(SYNC_CHECKPOINT lastDbSyncedIndex=820)
+N1->Peers: AppendEntries(SYNC_CHECKPOINT) → 전 노드 압축 하한선 동기화
+note over WB: T1+≤30s: 미동기화 0건 → 상태 = NORMAL (QAS-09)
+
+opt Reconciliation 도중 리더 교체
+note over WB: Follower 강등 즉시 Synchronizer 중단
+note over WB2: 신규 리더 승격 시 Synchronizer 활성화
+WB2->DB: SELECT last_log_index FROM batch_sync_checkpoint
+DB-->WB2: 마지막으로 커밋된 체크포인트 (예: 800)
+WB2->DB: BEGIN; INSERT 801..820 (중복 log_index 무시); UPDATE checkpoint = 820; COMMIT
+note over WB2,DB: 구 리더의 미완료 트랜잭션과 구간이 겹쳐도\nUNIQUE(log_index)로 중복 반영 방지
+end
