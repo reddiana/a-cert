@@ -62,7 +62,12 @@ public class ClusterStateMachine {
 
     private CommandResult route(LogEntry e) {
         return switch (e.getType()) {
-            case NO_OP -> CommandResult.ok();
+            case NO_OP -> {
+                // 신규 리더 시계 기준으로 lease 재설정 (노드 간 시계 차이가 만료 판정에 영향을 주지 않도록)
+                lock.rebaseLeases(e.getProposedAt());
+                queue.rebaseLeases(e.getProposedAt());
+                yield CommandResult.ok();
+            }
             case LOCK_ACQUIRE, LOCK_RENEW, LOCK_RELEASE, LOCK_EXPIRE, LOCK_CANCEL -> lock.apply(e);
             case QUEUE_ENQUEUE, QUEUE_DEQUEUE, QUEUE_RENEW, QUEUE_ACK, QUEUE_REQUEUE, QUEUE_REASSIGN -> queue.apply(e);
             case JOURNAL_RECORD -> journal.apply(e);

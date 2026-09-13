@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 단일 JVM 가상 클러스터 (7.1.3 VirtualClusterContext).
@@ -47,6 +48,7 @@ public class VirtualCluster {
     private final Path baseDir;
     private final List<String> nodeIds = new ArrayList<>();
     private final Map<String, VirtualNode> nodes = new LinkedHashMap<>();
+    private final Map<String, Long> clockOffsets = new ConcurrentHashMap<>();
     private final VirtualNetworkRouter networkRouter = new VirtualNetworkRouter();
     private final MockDatabaseProxy dbProxy;
     private final ExecutionStatusProvider statusProvider;
@@ -84,13 +86,19 @@ public class VirtualCluster {
 
     private void startNode(String id) {
         RaftLogManager raftLog = new RaftLogManager(baseDir.resolve(id), true);
-        RaftNode raft = new RaftNode(id, nodeIds, networkRouter, raftLog, new ClusterStateMachine(), timings);
+        RaftNode raft = new RaftNode(id, nodeIds, networkRouter, raftLog, new ClusterStateMachine(), timings,
+                () -> System.currentTimeMillis() + clockOffsets.getOrDefault(id, 0L));
         WriteBehindSynchronizer sync = new WriteBehindSynchronizer(raft, dbProxy, "virtual-cluster", 500, 200L);
         RecoveryCoordinator recovery = new RecoveryCoordinator(raft, statusProvider, 500L, 30_000L);
         raft.start();
         sync.start();
         recovery.start();
         nodes.put(id, new VirtualNode(raftLog, raft, sync, recovery));
+    }
+
+    /** 노드 시스템 시계 오차 주입 (리더가 기록하는 proposedAt 및 리더의 만료 판정 시계에 반영). */
+    public void setClockOffset(String nodeId, long offsetMs) {
+        clockOffsets.put(nodeId, offsetMs);
     }
 
     /** 프로세스 강제 종료 시뮬레이션: 영속화 없이 정지 (WAL 파일은 유지). */

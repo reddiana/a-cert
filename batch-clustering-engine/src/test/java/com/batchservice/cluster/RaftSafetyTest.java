@@ -164,4 +164,35 @@ class RaftSafetyTest {
             cluster.shutdown();
         }
     }
+
+    @Test
+    @DisplayName("신규 리더의 시계가 60초 앞서도 유효한 락·작업 lease가 조기 만료되지 않는다 (노드 간 시계 동기화 비의존)")
+    void leaseSurvivesLeaderChangeWithClockSkew(@TempDir Path dir) throws Exception {
+        VirtualCluster cluster = new VirtualCluster(3, dir);
+        cluster.start();
+        try {
+            RaftNode leader = awaitLeader(cluster);
+            String oldLeaderId = leader.getNodeId();
+            cluster.getNodeIds().stream().filter(id -> !id.equals(oldLeaderId))
+                    .forEach(id -> cluster.setClockOffset(id, 60_000L));
+
+            long fenceToken = leader.execute(Command.lockAcquire("skew-lock", "worker:A", 10_000L, 0L), 2_000L).getToken();
+            assertThat(cluster.getQueueService(oldLeaderId).offer("JOB-SKEW")).isTrue();
+            CommandResult lease = leader.execute(Command.dequeue("worker-x", 30_000L), 2_000L);
+            assertThat(lease.getValue()).isEqualTo("JOB-SKEW");
+
+            cluster.crash(oldLeaderId);
+            RaftNode newLeader = await().atMost(5, TimeUnit.SECONDS).until(cluster::getLeaderNode,
+                    l -> l != null && !l.getNodeId().equals(oldLeaderId));
+            Thread.sleep(1_500L); // RecoveryCoordinator 스캔(500ms 주기) 수행 대기
+
+            assertThat(cluster.getRecoveryActions()).isEmpty(); // lease 만료에 의한 회수·재적재 없음
+            assertThat(newLeader.execute(Command.lockAcquire("skew-lock", "worker:B", 10_000L, 0L), 2_000L).isOk()).isFalse();
+            assertThat(newLeader.getStateMachine().getLock().get("skew-lock").fenceToken()).isEqualTo(fenceToken);
+            assertThat(newLeader.execute(Command.lockRenew("skew-lock", fenceToken, 10_000L), 2_000L).isOk()).isTrue();
+            assertThat(newLeader.getStateMachine().getQueue().getInFlight("JOB-SKEW").leaseToken()).isEqualTo(lease.getToken());
+        } finally {
+            cluster.shutdown();
+        }
+    }
 }

@@ -16,7 +16,7 @@ import java.util.Set;
  */
 public class QueueStateMachine {
 
-    public record InFlight(String jobId, String worker, long leaseToken, long deadline) {}
+    public record InFlight(String jobId, String worker, long leaseToken, long visibilityMs, long deadline) {}
 
     private final ArrayDeque<String> waiting = new ArrayDeque<>();
     private final Set<String> known = new HashSet<>();
@@ -43,13 +43,14 @@ public class QueueStateMachine {
                 }
                 long visibility = c.longAttr(Command.VISIBILITY_MS, 30_000L);
                 inFlight.put(head, new InFlight(head, c.attr(Command.WORKER), e.getIndex(),
-                        e.getProposedAt() + visibility));
+                        visibility, e.getProposedAt() + visibility));
                 return new CommandResult(true, e.getIndex(), head);
             }
             case QUEUE_RENEW -> {
                 if (f != null && f.leaseToken() == token) {
+                    long visibility = c.longAttr(Command.VISIBILITY_MS, 30_000L);
                     inFlight.put(jobId, new InFlight(jobId, f.worker(), token,
-                            e.getProposedAt() + c.longAttr(Command.VISIBILITY_MS, 30_000L)));
+                            visibility, e.getProposedAt() + visibility));
                     return CommandResult.ok();
                 }
                 return CommandResult.rejected();
@@ -74,7 +75,7 @@ public class QueueStateMachine {
                 if (f != null && f.leaseToken() == token) {
                     long visibility = c.longAttr(Command.VISIBILITY_MS, 30_000L);
                     inFlight.put(jobId, new InFlight(jobId, c.attr(Command.WORKER), e.getIndex(),
-                            e.getProposedAt() + visibility));
+                            visibility, e.getProposedAt() + visibility));
                     return new CommandResult(true, e.getIndex(), jobId);
                 }
                 return CommandResult.rejected();
@@ -83,6 +84,14 @@ public class QueueStateMachine {
                 return CommandResult.rejected();
             }
         }
+    }
+
+    /**
+     * 신규 리더의 {@code NO_OP} apply 시 in-flight lease 기준 시계를 재설정합니다.
+     * 이전 리더 시계로 계산된 deadline 대신 신규 리더 시계로 visibility 전체를 다시 부여합니다 (LockStateMachine과 동일 원칙).
+     */
+    synchronized void rebaseLeases(long now) {
+        inFlight.replaceAll((k, f) -> new InFlight(k, f.worker(), f.leaseToken(), f.visibilityMs(), now + f.visibilityMs()));
     }
 
     // ─── 로컬 조회 ────────────────────────────────────────────────────────────

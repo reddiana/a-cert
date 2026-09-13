@@ -29,6 +29,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 /**
  * Raft 합의 엔진 (DD-01, 5.4 ConsensusEngine).
@@ -52,7 +53,12 @@ public class RaftNode {
     private final RaftLogManager raftLog;
     private final ClusterStateMachine fsm;
     private final RaftTimings timings;
+    /** proposedAt 기록 및 리더의 lease 만료 판정용 시계 (벽시계). 타이머는 {@link #monotonicMs()} 사용. */
+    private final LongSupplier wallClock;
     private final Random random = new Random();
+
+    /** 응답 이력이 없는 피어의 기준 시각 (단조 시계 원점과 무관하게 "오래전"으로 취급). */
+    private static final long NEVER = Long.MIN_VALUE / 2;
 
     /** Raft 상태 보호 락. 순서: lock → fsm → raftLog */
     private final Object lock = new Object();
@@ -102,6 +108,11 @@ public class RaftNode {
 
     public RaftNode(String nodeId, List<String> allNodeIds, NetworkTransport transport,
                     RaftLogManager raftLog, ClusterStateMachine fsm, RaftTimings timings) {
+        this(nodeId, allNodeIds, transport, raftLog, fsm, timings, System::currentTimeMillis);
+    }
+
+    public RaftNode(String nodeId, List<String> allNodeIds, NetworkTransport transport,
+                    RaftLogManager raftLog, ClusterStateMachine fsm, RaftTimings timings, LongSupplier wallClock) {
         if (!allNodeIds.contains(nodeId)) {
             throw new IllegalArgumentException("allNodeIds must contain local nodeId " + nodeId);
         }
@@ -112,6 +123,7 @@ public class RaftNode {
         this.raftLog = raftLog;
         this.fsm = fsm;
         this.timings = timings;
+        this.wallClock = wallClock;
         this.currentTerm = raftLog.getCurrentTerm();
         this.votedFor = raftLog.getVotedFor();
         this.commitIndex = raftLog.getPersistedCommitIndex();
@@ -122,7 +134,7 @@ public class RaftNode {
         synchronized (lock) {
             if (running) return;
             running = true;
-            long now = System.currentTimeMillis();
+            long now = monotonicMs();
             // 기동 시 WAL Replay: 영속화된 commitIndex까지 FSM 복원 (Scenario 3)
             applyLocked(new ArrayList<>());
             for (String p : peers) {
@@ -183,7 +195,7 @@ public class RaftNode {
     }
 
     private void tick() {
-        long now = System.currentTimeMillis();
+        long now = monotonicMs();
         List<Runnable> after = new ArrayList<>();
         long commitToPersist = -1;
         synchronized (lock) {
@@ -221,7 +233,7 @@ public class RaftNode {
         if (now - leaderSince < timings.electionTimeoutMinMs()) return;
         int reachable = 1;
         for (String p : peers) {
-            if (now - lastAck.getOrDefault(p, 0L) < timings.electionTimeoutMinMs()) reachable++;
+            if (now - lastAck.getOrDefault(p, NEVER) < timings.electionTimeoutMinMs()) reachable++;
         }
         if (reachable < quorum()) {
             log.warn("[{}] Check-Quorum failed ({}/{} reachable). Stepping down to FOLLOWER.",
@@ -234,11 +246,11 @@ public class RaftNode {
     /** 팔로워 무응답 2초 → DEAD, 따라잡기 완료 → ALIVE 를 로그로 커밋 (Scenario 3, QAS-04). */
     private void detectMemberChangesLocked(long now, List<Runnable> after) {
         for (String p : peers) {
-            boolean unresponsive = now - lastAck.getOrDefault(p, 0L) >= timings.memberFailureTimeoutMs();
+            boolean unresponsive = now - lastAck.getOrDefault(p, NEVER) >= timings.memberFailureTimeoutMs();
             boolean markedDead = !fsm.isAlive(p);
             if (unresponsive && !markedDead && pendingMemberProposals.add(p)) {
                 log.warn("[{}] No AppendResponse from [{}] for {}ms. Proposing MEMBER_STATUS DEAD.",
-                        nodeId, p, now - lastAck.getOrDefault(p, 0L));
+                        nodeId, p, now - lastAck.getOrDefault(p, NEVER));
                 after.add(() -> proposeMemberStatus(p, false));
             } else if (!unresponsive && markedDead && matchIndex.getOrDefault(p, 0L) >= commitIndex
                     && pendingMemberProposals.add(p)) {
@@ -296,7 +308,7 @@ public class RaftNode {
 
     private void handlePreVoteLocked(Message m, long now) {
         boolean leaderAlive = role == RaftRole.LEADER
-                || (leaderId != null && now - lastHeardFrom.getOrDefault(leaderId, 0L) < timings.electionTimeoutMinMs());
+                || (leaderId != null && now - lastHeardFrom.getOrDefault(leaderId, NEVER) < timings.electionTimeoutMinMs());
         boolean granted = m.getTerm() > currentTerm && !leaderAlive
                 && isUpToDateLocked(m.getLastLogIndex(), m.getLastLogTerm());
         transport.send(Message.voteResponse(nodeId, m.getSenderId(), m.getTerm(), granted, true));
@@ -361,7 +373,7 @@ public class RaftNode {
         log.info("[{}] Promoted to LEADER for term {} (lastIndex={}).", nodeId, currentTerm, last);
         // 현재 term의 NO_OP 커밋으로 이전 term 엔트리 확정 (Scenario 2 3단계)
         noOpIndex = last + 1;
-        appendLocked(List.of(Command.noOp()), now);
+        appendLocked(List.of(Command.noOp()), wallClock.getAsLong()); // NO_OP proposedAt = lease 재설정 기준 (벽시계)
         lastHeartbeatSent = now;
         for (String p : peers) {
             replicateToLocked(p, true);
@@ -415,7 +427,7 @@ public class RaftNode {
         List<Runnable> completions = new ArrayList<>();
         synchronized (lock) {
             if (!running) return;
-            long now = System.currentTimeMillis();
+            long now = monotonicMs();
             lastHeardFrom.put(m.getSenderId(), now);
             boolean preVoteMessage = m.isPreVote();
             if (!preVoteMessage && m.getTerm() > currentTerm) {
@@ -453,10 +465,10 @@ public class RaftNode {
      * @throws ClusterUnavailableException timeoutMs 내에 커밋하지 못한 경우
      */
     public List<CommandResult> execute(List<Command> commands, long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
+        long deadline = monotonicMs() + timeoutMs;
         Throwable lastError = null;
         while (running) {
-            long remaining = deadline - System.currentTimeMillis();
+            long remaining = deadline - monotonicMs();
             if (remaining <= 0) break;
             String target;
             synchronized (lock) {
@@ -475,7 +487,7 @@ public class RaftNode {
                 lastError = e;
             } catch (ExecutionException e) {
                 lastError = e.getCause();
-                sleepQuietly(Math.min(Math.max(deadline - System.currentTimeMillis(), 0L), 20L));
+                sleepQuietly(Math.min(Math.max(deadline - monotonicMs(), 0L), 20L));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new ClusterUnavailableException("Interrupted while waiting for commit", e);
@@ -496,7 +508,7 @@ public class RaftNode {
             if (!running || role != RaftRole.LEADER) {
                 return CompletableFuture.failedFuture(new NotLeaderException(leaderId));
             }
-            futures = appendLocked(commands, System.currentTimeMillis());
+            futures = appendLocked(commands, wallClock.getAsLong());
         }
         replicateSignal.release();
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
@@ -747,6 +759,11 @@ public class RaftNode {
         pendingByIndex.clear();
     }
 
+    /** 경과 시간 측정용 단조 시계 (벽시계 조정의 영향을 받지 않음). */
+    private static long monotonicMs() {
+        return System.nanoTime() / 1_000_000L;
+    }
+
     private static void sleepQuietly(long ms) {
         if (ms <= 0) return;
         try {
@@ -765,6 +782,8 @@ public class RaftNode {
     public ClusterStateMachine getStateMachine() { return fsm; }
     public RaftLogManager getRaftLog() { return raftLog; }
     public RaftTimings getTimings() { return timings; }
+    /** 리더가 proposedAt에 기록하는 벽시계. 리더의 lease 만료 판정은 이 시계로 수행합니다. */
+    public long wallClockMillis() { return wallClock.getAsLong(); }
 
     public RaftRole getRole() { synchronized (lock) { return role; } }
     public boolean isLeader() { synchronized (lock) { return running && role == RaftRole.LEADER; } }

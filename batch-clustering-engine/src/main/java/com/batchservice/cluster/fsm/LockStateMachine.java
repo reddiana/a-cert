@@ -12,17 +12,18 @@ import java.util.Map;
  *
  * <ul>
  *   <li>lease 만료 판정은 로컬 시계가 아닌 엔트리의 {@code proposedAt} 기준</li>
+ *   <li>신규 리더의 {@code NO_OP} apply 시 lease를 신규 리더 시계 기준으로 재설정 (노드 간 시계 동기화 비의존)</li>
  *   <li>{@code fenceToken} = 락을 부여한 커밋 엔트리의 로그 인덱스 (단조 증가)</li>
  *   <li>대기자(waiter)는 FIFO로 관리하여 해제 시 결정론적으로 다음 소유자에게 부여 (경합 재시도 폭주 방지)</li>
  * </ul>
  */
 public class LockStateMachine {
 
-    public record LockInfo(String key, String owner, long fenceToken, long expireAt) {
+    public record LockInfo(String key, String owner, long fenceToken, long leaseMs, long expireAt) {
         public boolean isExpiredAt(long time) { return expireAt <= time; }
     }
 
-    private record Waiter(String owner, long leaseMs, long waitDeadline) {}
+    private record Waiter(String owner, long leaseMs, long waitMs, long waitDeadline) {}
 
     public static final String GRANTED = "GRANTED";
     public static final String QUEUED = "QUEUED";
@@ -49,17 +50,17 @@ public class LockStateMachine {
                 }
                 if (cur == null) {
                     removeWaiter(key, owner);
-                    locks.put(key, new LockInfo(key, owner, e.getIndex(), now + leaseMs));
+                    locks.put(key, new LockInfo(key, owner, e.getIndex(), leaseMs, now + leaseMs));
                     return new CommandResult(true, e.getIndex(), GRANTED);
                 }
                 if (cur.owner().equals(owner)) {
-                    locks.put(key, new LockInfo(key, owner, cur.fenceToken(), now + leaseMs));
+                    locks.put(key, new LockInfo(key, owner, cur.fenceToken(), leaseMs, now + leaseMs));
                     return new CommandResult(true, cur.fenceToken(), GRANTED);
                 }
                 if (waitMs > 0) {
                     ArrayDeque<Waiter> q = waiters.computeIfAbsent(key, k -> new ArrayDeque<>());
                     if (q.stream().noneMatch(w -> w.owner().equals(owner))) {
-                        q.addLast(new Waiter(owner, leaseMs, now + waitMs));
+                        q.addLast(new Waiter(owner, leaseMs, waitMs, now + waitMs));
                     }
                     return new CommandResult(false, 0L, QUEUED);
                 }
@@ -67,8 +68,8 @@ public class LockStateMachine {
             }
             case LOCK_RENEW -> {
                 if (cur != null && cur.fenceToken() == c.longAttr(Command.TOKEN, -1L) && !cur.isExpiredAt(now)) {
-                    locks.put(key, new LockInfo(key, cur.owner(), cur.fenceToken(),
-                            now + c.longAttr(Command.LEASE_MS, 10_000L)));
+                    long leaseMs = c.longAttr(Command.LEASE_MS, 10_000L);
+                    locks.put(key, new LockInfo(key, cur.owner(), cur.fenceToken(), leaseMs, now + leaseMs));
                     return new CommandResult(true, cur.fenceToken(), GRANTED);
                 }
                 return CommandResult.rejected();
@@ -97,13 +98,31 @@ public class LockStateMachine {
         }
     }
 
+    /**
+     * 신규 리더의 {@code NO_OP} apply 시 lease 기준 시계를 재설정합니다.
+     *
+     * <p>기존 만료 시각은 이전 리더의 시계로 계산되어 신규 리더 시계와 비교할 수 없으므로,
+     * {@code NO_OP}의 {@code proposedAt}(신규 리더 시계)부터 lease·대기 기간 전체를 다시 부여합니다.
+     * 만료는 늦어질 수만 있고 앞당겨지지 않으므로 노드 간 시계 차이로 인한 이중 소유가 발생하지 않습니다.
+     */
+    synchronized void rebaseLeases(long now) {
+        locks.replaceAll((k, l) -> new LockInfo(k, l.owner(), l.fenceToken(), l.leaseMs(), now + l.leaseMs()));
+        for (ArrayDeque<Waiter> q : waiters.values()) {
+            List<Waiter> rebased = q.stream()
+                    .map(w -> new Waiter(w.owner(), w.leaseMs(), w.waitMs(), now + w.waitMs()))
+                    .toList();
+            q.clear();
+            q.addAll(rebased);
+        }
+    }
+
     /** 유효한(대기 기한이 남은) 첫 번째 대기자에게 락 부여. fenceToken = 부여 엔트리 인덱스. */
     private void promote(String key, LogEntry e) {
         ArrayDeque<Waiter> q = waiters.get(key);
         while (q != null && !q.isEmpty()) {
             Waiter w = q.pollFirst();
             if (w.waitDeadline() > e.getProposedAt()) {
-                locks.put(key, new LockInfo(key, w.owner(), e.getIndex(), e.getProposedAt() + w.leaseMs()));
+                locks.put(key, new LockInfo(key, w.owner(), e.getIndex(), w.leaseMs(), e.getProposedAt() + w.leaseMs()));
                 break;
             }
         }
