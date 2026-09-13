@@ -68,7 +68,7 @@ sed -i -E '
 #   SVG 글자가 HTML(<foreignObject>)이라 Word 에서 사라지므로, mermaid-cli 에 포함된 puppeteer(Chrome)로 렌더링
 MMDC_PKG="$(cd "$(dirname "$(readlink -f "$MMDC")")/.." && pwd)"
 PUPPETEER_MODULE="$MMDC_PKG/node_modules/puppeteer" \
-  node "$TOOLS/svg2png.mjs" "$MD" "$BUILD/svg" . assets
+  node "$TOOLS/svg2png.mjs" "$MD" "$BUILD/svg" . assets assets/drawio assets/sequence
 
 # 3) pandoc
 export MMDC
@@ -83,7 +83,7 @@ pandoc "$MD" -o "$OUTPUT" \
   --lua-filter="$TOOLS/table-widths.lua" \
   --lua-filter="$TOOLS/table-cells.lua" \
   --lua-filter="$TOOLS/mermaid.lua" \
-  --resource-path=".:assets"
+  --resource-path=".:assets:assets/sequence:assets/drawio"
 
 # 4) docx 보정: 표 서식(pandoc 은 표 스타일을 지정할 수 없음), 수식 스키마 오류
 python3 "$TOOLS/docx-fix.py" "$OUTPUT"

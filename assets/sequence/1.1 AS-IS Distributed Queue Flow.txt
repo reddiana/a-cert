@@ -1,0 +1,64 @@
+participant "Batch Job scheduler Replica #1" as DAG1
+
+participant "Batch Job scheduler Replica #2" as DAG2
+
+participant "Distribute Queue" as Q #pink
+
+participantgroup Execution Environment
+participant "Batch Job #1" as B1
+participant "Batch Job #2" as B2
+participant "Batch Job #3" as B3
+end
+
+
+activate DAG1
+
+DAG1->>*B1:launch job #1
+activate B1
+deactivateafter B1
+destroyafter B1
+alt next step job 실행 가능할 경우
+DAG1-[#red;2]>Q:push next job (job #2, job #3)
+activate Q
+deactivateafter Q
+end
+
+
+deactivateafter DAG1
+space
+activate DAG2
+
+DAG2-[#red;2]>Q:fetch job #2
+activate Q
+deactivateafter Q
+
+DAG2->>*B2:launch job #2
+activate B2
+deactivateafter B2
+destroyafter B2
+
+alt next step job 실행 가능할 경우
+DAG2->Q:push next job (job #4)
+activate Q
+deactivateafter Q
+end
+deactivateafter DAG2
+
+
+space
+activate DAG1
+DAG1-[#red;2]>Q:fetch job #3
+activate Q
+deactivateafter Q
+DAG1->>*B3:launch job #3
+activate B3
+deactivateafter B3
+destroyafter B3
+
+alt next step job 실행 가능할 경우
+DAG1->Q:push next job (job #4)
+activate Q
+deactivateafter Q
+end
+
+

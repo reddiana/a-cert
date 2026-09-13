@@ -1,0 +1,82 @@
+participant "Batch Job scheduler Replica #1" as DAG1
+
+participant "Batch Job scheduler Replica #2" as DAG2
+
+participant "Distribute Lock" as Lock #pink
+participant "Distribute Queue" as Q #pink
+database "DAG Workflow 상태" as w
+
+participantgroup Execution Environment
+participant "Batch Job #2" as B2
+participant "Batch Job #3" as B3
+end
+
+
+activate DAG2
+
+DAG2->Q:fetch job
+activate Q
+deactivateafter Q
+
+DAG2->>*B2:launch job
+DAG2->B2:watch job
+activate B2
+deactivateafter B2
+destroyafter B2
+
+DAG2->Lock:Lock 획득
+activate Lock
+deactivateafter Lock
+critical #ffeded
+DAG2-[#red;2]>w:DAG workflow 상태 조회 (타 인스턴스 작업내용)
+activate w
+deactivateafter w
+DAG2->DAG2:next step job 실행 가능 평가
+alt next step job 실행 가능할 경우
+DAG2-[#red;2]>w:DAG workflow 상태 갱신
+activate w
+deactivateafter w
+DAG2->Q:push next job
+activate Q
+deactivateafter Q
+end
+end
+DAG2->Lock:Lock 해제
+activate Lock
+deactivateafter Lock
+deactivateafter DAG2
+
+activate DAG1
+
+
+DAG1->Q:fetch job
+activate Q
+deactivateafter Q
+DAG1->>*B3:launch job
+DAG1->B3:watch job
+activate B3
+deactivateafter B3
+destroyafter B3
+
+DAG1->Lock:Lock획득
+activate Lock
+deactivateafter Lock
+critical #ffeded
+DAG1-[#red;2]>w:DAG workflow 상태 조회 (타 인스턴스 작업내용)
+activate w
+deactivateafter w
+DAG1->DAG1:next step job 실행 가능 평가
+alt next step job 실행 가능할 경우
+DAG1-[#red;2]>w:DAG workflow 상태 갱신
+activate w
+deactivateafter w
+DAG1->Q:push next job
+activate Q
+deactivateafter Q
+end
+end
+
+
+DAG1->Lock:Lock해제
+activate Lock
+deactivateafter Lock
