@@ -16,4 +16,4 @@ batch:
 
 logging:
   level:
-    com.batchservice.cluster: INFO
+    com.sds.batchservice.cluster: INFO

@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
 }
 
-group = 'com.batchservice'
+group = 'com.sds.batchservice'
 version = '1.0.0-SNAPSHOT'
 
 java {
