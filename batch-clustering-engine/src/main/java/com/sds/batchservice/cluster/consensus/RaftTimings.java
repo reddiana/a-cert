@@ -1,7 +1,7 @@
 package com.sds.batchservice.cluster.consensus;
 
 /**
- * Raft 타이밍 파라미터 (5.3.2 공통 런타임 규약 5).
+ * Raft 타이밍 파라미터 (5.3.2 공통 런타임 규약 6).
  *
  * @param heartbeatIntervalMs     리더 Heartbeat 주기 (기본 500ms)
  * @param electionTimeoutMinMs    Election Timeout 하한 (기본 1,500ms, GC STW 1초 + Heartbeat 여유)
