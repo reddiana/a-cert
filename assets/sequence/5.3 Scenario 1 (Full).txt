@@ -88,7 +88,7 @@ N1->N1: commitIndex = 107
 N1->FSM1: apply(106..107) → exec-101 = COMPLETED, in-flight 제거
 N1-->L2: ClientResponse(OK)
 Sched->FSM1: 로컬 FSM 조회 (awaitApply) → Job_101 완료 반영 확인\n→ 후행 DAG 판정 (1단계 반복)
-par Heartbeat (500ms)
+par Heartbeat (250ms)
 N1->N2: AppendEntries(entries=[], leaderCommit=107)
 else
 N1->N3: AppendEntries(entries=[], leaderCommit=107)

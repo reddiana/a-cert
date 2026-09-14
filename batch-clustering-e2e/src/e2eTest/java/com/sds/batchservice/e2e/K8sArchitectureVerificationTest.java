@@ -102,6 +102,7 @@ class K8sArchitectureVerificationTest {
                 .until(() -> cluster.k8sReadyPodCount() == PODS.size() && cluster.findLeader().isPresent());
         long totalBootstrapTime = System.currentTimeMillis() - start;
         String leader = cluster.awaitLeader();
+        long bootstrapCommitIndex = cluster.status(leader).path("commitIndex").asLong();
 
         // 실제 TCP(Headless Service DNS) 경로로 복제·커밋 확인
         String job = "JOB-SOCKET-" + run;
@@ -114,9 +115,10 @@ class K8sArchitectureVerificationTest {
         long externalProcessCount = workloads.lines()
                 .filter(l -> !l.matches("batch-scheduler-\\d\\|batch-scheduler\\|"))
                 .count();
-        log.info("TC-K8S-08: kubectl apply → 3 Pods Ready + leader in {}ms (leader={}), workloads=[{}], external middleware={}",
-                totalBootstrapTime, leader, workloads.replace('\n', ' '), externalProcessCount);
+        log.info("TC-K8S-08: kubectl apply → 3 Pods Ready + leader in {}ms (leader={}, commitIndex={}), workloads=[{}], external middleware={}",
+                totalBootstrapTime, leader, bootstrapCommitIndex, workloads.replace('\n', ' '), externalProcessCount);
 
+        assertThat(bootstrapCommitIndex).as("fresh WAL bootstrap (no leftover log)").isLessThanOrEqualTo(10L);
         assertThat(externalProcessCount).isZero();
         assertThat(totalBootstrapTime).isLessThanOrEqualTo(120_000L);
     }

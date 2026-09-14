@@ -7,7 +7,7 @@ participant "K8s StatefulSet\nController" as K8s
 participant "PVC\nwal-storage-batch-scheduler-2" as PVC
 
 note over N3: T0: Node 3 Crash (matchIndex=200)
-loop Heartbeat 500ms 주기
+loop Heartbeat 250ms 주기
 N1->N2: AppendEntries(entries=[], leaderCommit)
 N2-->N1: AppendResponse(success=true) → lastAck[node-2] 갱신
 N1-xN3: AppendEntries (응답 없음)

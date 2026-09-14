@@ -84,8 +84,53 @@ public final class K8sCluster {
         List<String> args = new ArrayList<>(List.of("delete", "pvc", "-n", NAMESPACE, "--ignore-not-found", "--wait=true"));
         PODS.forEach(p -> args.add("wal-storage-" + p));
         Kubectl.run(args.toArray(String[]::new));
+        cleanupWalHostPath();
         ensureMetaDb();
         psql("TRUNCATE batch_journal_log, batch_sync_checkpoint");
+    }
+
+    /**
+     * minikube hostpath 프로비저너는 PVC 이름으로 디렉터리를 만들며, 프로비저너 재시작 등으로 PV가 Released 상태로 남으면
+     * 같은 이름의 새 PVC가 이전 WAL을 재사용합니다. 신규 부트스트랩을 보장하기 위해 남은 PV와 디렉터리를 정리합니다.
+     */
+    private void cleanupWalHostPath() {
+        String pvs = Kubectl.run("get", "pv", "-o",
+                "jsonpath={range .items[*]}{.metadata.name}|{.spec.claimRef.namespace}|{.spec.claimRef.name}{\"\\n\"}{end}");
+        for (String line : pvs.lines().toList()) {
+            String[] cols = line.split("\\|", -1);
+            if (cols.length == 3 && NAMESPACE.equals(cols[1]) && cols[2].startsWith("wal-storage-")) {
+                log.info("Deleting leftover PV {} (claim {})", cols[0], cols[2]);
+                Kubectl.run("delete", "pv", cols[0], "--ignore-not-found", "--wait=true");
+            }
+        }
+        Kubectl.run("delete", "job", "wal-hostpath-cleanup", "-n", NAMESPACE, "--ignore-not-found", "--wait=true");
+        Kubectl.apply("""
+                apiVersion: batch/v1
+                kind: Job
+                metadata:
+                  name: wal-hostpath-cleanup
+                  namespace: %s
+                spec:
+                  backoffLimit: 0
+                  template:
+                    spec:
+                      restartPolicy: Never
+                      containers:
+                        - name: cleanup
+                          image: batch-cluster-testbed:e2e
+                          imagePullPolicy: IfNotPresent
+                          command: ["sh", "-c", "rm -rf /hostpath/wal-storage-batch-scheduler-*"]
+                          volumeMounts:
+                            - name: hostpath
+                              mountPath: /hostpath
+                      volumes:
+                        - name: hostpath
+                          hostPath:
+                            path: /tmp/hostpath-provisioner/%s
+                            type: DirectoryOrCreate
+                """.formatted(NAMESPACE, NAMESPACE));
+        Kubectl.run("wait", "--for=condition=complete", "job/wal-hostpath-cleanup", "-n", NAMESPACE, "--timeout=120s");
+        Kubectl.run("delete", "job", "wal-hostpath-cleanup", "-n", NAMESPACE, "--ignore-not-found", "--wait=false");
     }
 
     public String psql(String sql) {
