@@ -72,7 +72,7 @@ public class RecoveryCoordinator {
         if (worker != null) worker.shutdownNow();
     }
 
-    /** 수요처 BatchLauncher가 인수(ADOPTED)·재적재 이벤트를 받아 추적을 이어가도록 등록. */
+    /** BatchService의 BatchLauncher가 인수(ADOPTED)·재적재 이벤트를 받아 추적을 이어가도록 등록. */
     public void addListener(Consumer<RecoveryAction> listener) {
         listeners.add(listener);
     }

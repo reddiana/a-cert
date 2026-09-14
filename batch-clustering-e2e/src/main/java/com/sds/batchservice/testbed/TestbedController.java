@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * K8s 통합 검증용 테스트 API (7.1.6).
  *
- * <p>수요처 애플리케이션을 대신하여 엔진의 In-Process API를 HTTP로 노출합니다. 지연 시간은 서버 측에서 계측하여
+ * <p>BatchService를 대신하여 엔진의 In-Process API를 HTTP로 노출합니다. 지연 시간은 서버 측에서 계측하여
  * 검증 드라이버와의 HTTP 왕복 시간과 분리합니다. 엔진이 비활성화된 기준선 Pod(TC-K8S-07)에서는 JVM 정보만 제공합니다.
  */
 @RestController

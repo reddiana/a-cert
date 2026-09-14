@@ -22,7 +22,7 @@ sourceSets {
 }
 
 dependencies {
-    // 테스트용 수요처 애플리케이션 (Testbed): 엔진 Embedded Library + Web/Actuator/JDBC
+    // BatchService를 대신하는 테스트 애플리케이션 (Testbed): 엔진 Embedded Library + Web/Actuator/JDBC
     implementation platform('org.springframework.boot:spring-boot-dependencies:3.2.4')
     implementation 'com.sds.batchservice:batch-clustering-engine:1.0.0-SNAPSHOT'
     implementation 'org.springframework.boot:spring-boot-starter-web'

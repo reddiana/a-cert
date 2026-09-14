@@ -9,9 +9,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
 /**
- * K8s 통합 검증용 수요처 애플리케이션 (7.1.6).
+ * BatchService를 대신하는 K8s 통합 검증용 테스트 애플리케이션 (7.1.6).
  *
- * <p>엔진은 수요처와 동일하게 Spring Boot 자동 구성({@code BatchClusteringAutoConfiguration})으로 주입됩니다.
+ * <p>엔진은 BatchService와 동일하게 Spring Boot 자동 구성({@code BatchClusteringAutoConfiguration})으로 주입됩니다.
  */
 @SpringBootApplication
 public class TestbedApplication {

@@ -12,7 +12,7 @@ spring:
       maximum-pool-size: 4
       initialization-fail-timeout: -1
 
-# 5.4.2 수요처 application.yaml 운영 권장값
+# 5.4.2 BatchService application.yaml 운영 권장값
 batch:
   cluster:
     cluster-id: batch-cluster

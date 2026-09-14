@@ -21,11 +21,11 @@ dependencies {
     compileOnly platform('org.springframework.boot:spring-boot-dependencies:3.2.4')
     testImplementation platform('org.springframework.boot:spring-boot-dependencies:3.2.4')
 
-    // Embedded library (DD-06): 수요처 애플리케이션에 최소 의존성만 전이
+    // Embedded library (DD-06): BatchService에 최소 의존성만 전이
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
     implementation 'org.slf4j:slf4j-api'
 
-    // 선택 의존성: 수요처에 존재할 때만 활성화 (4.2.1 JDBC/HikariCP, 5.4 Actuator Probe)
+    // 선택 의존성: 탑재 애플리케이션에 존재할 때만 활성화 (4.2.1 JDBC/HikariCP, 5.4 Actuator Probe)
     compileOnly 'org.springframework:spring-jdbc'
     compileOnly 'org.springframework.boot:spring-boot-actuator'
 
