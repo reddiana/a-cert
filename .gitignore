@@ -11,3 +11,4 @@
 .obsidian/**/data.json
 ~*
 .export/
+.idea/

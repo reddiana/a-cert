@@ -45,7 +45,7 @@ alt Target = RUNNING (실행 Pod 생존, 추적 노드만 소실)
 Target-->RC: RUNNING
 RC->N2: propose(QUEUE_REASSIGN Job_101 → node-2,\nJOURNAL_RECORD exec-101 executorNode=node-2)
 note over N2,N3: index=110..111 복제·커밋\n→ 신규 leaseToken=110, 재실행 없이 추적 인수
-else Target = FAILED 또는 NOT_FOUND
+else Target = FAILED, NOT_FOUND 또는 UNKNOWN(SPI 미구현·조회 불가)
 Target-->RC: NOT_FOUND
 RC->N2: propose(LOCK_EXPIRE (node-1 소유 락),\nJOURNAL_RECORD exec-101 PENDING,\nQUEUE_REQUEUE Job_101 front=true)
 note over N2,N3: index=110..112 복제·커밋\n→ Job_101 대기열 최우선 재적재

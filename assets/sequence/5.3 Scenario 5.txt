@@ -11,8 +11,8 @@ note over C1,N1: 1. 소수파: 커밋 불가
 C1->N1: pollLease() → QUEUE_DEQUEUE
 N1-xN2: AppendEntries (전달 불가)
 note over N1: 과반수 응답 없음 → 미커밋 → 작업 미인출
-N1-->C1: TIMEOUT
-note over N1: Check-Quorum → FOLLOWER 강등\n이후 쓰기 요청 거부 (NOT_LEADER)
+note over N1: Check-Quorum → FOLLOWER 강등
+N1-->C1: NOT_LEADER → 재시도 한도 초과 시\nClusterUnavailableException
 
 note over N2,N3: 2. 다수파: 신규 리더 선출 및 정상 쓰기
 N2->N3: PreVote → RequestVote

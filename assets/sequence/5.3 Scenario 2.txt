@@ -22,7 +22,7 @@ N2->Target: getExecutionStatus(exec-101)
 alt Target = RUNNING
 Target-->N2: RUNNING
 N2->N3: QUEUE_REASSIGN 복제·커밋 → 재실행 없이 추적 인수
-else Target = FAILED / NOT_FOUND
+else Target = FAILED / NOT_FOUND / UNKNOWN
 Target-->N2: NOT_FOUND
 N2->N3: QUEUE_REQUEUE(front) 복제·커밋 → 재적재 후 재실행
 else Target = COMPLETED

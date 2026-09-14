@@ -1,0 +1,79 @@
+title 4.1.5.2.3 Embedded Local Disk WAL First & Peer Sync Flow
+
+participantgroup Node 1 (Leader)
+participant "Node 1: Distributed\nFSM Core" as N1_FSM
+participant "Node 1: Local WAL\nManager" as N1_WALMgr
+participant "Node 1: Local Disk\nStorage (PVC)" as N1_Disk
+participant "Node 1: Raft Peer\nSynchronizer" as N1_PeerSync
+participant "Node 1: Write-Behind\nSynchronizer" as N1_WB
+participant "Node 1: Reconciliation\nEngine" as N1_Reconcile
+end
+participantgroup Node 2 (Peer)
+participant "Node 2: Raft Peer\nSynchronizer" as N2_PeerSync
+participant "Node 2: Local WAL\nManager" as N2_WALMgr
+participant "Node 2: Local Disk\nStorage (PVC)" as N2_Disk
+participant "Shared Meta\nRDBMS" as MetaDB
+end
+
+== 1. [Local WAL First] 상태 변경 및 로컬 디스크 fsync ==
+N1_FSM->N1_WALMgr: 1.1 mutateState\n(entry={index=401, \ntype="MUTATION", \ndata="..."}) \n[상태 변경 요청]
+activate N1_WALMgr
+N1_WALMgr->N1_Disk: 1.2 writeAndFsync(\nsegmentFile="000401.wal", entry) \n[로컬 디스크 fsync 선기록]
+activate N1_Disk
+N1_Disk-->N1_WALMgr: 디스크 영속화 완료 (Local WAL First 완결)
+deactivate N1_Disk
+
+== 2. [Peer Sync] Raft 채널을 통한 피어 노드 복제 ==
+N1_WALMgr->N1_PeerSync: 2.1 syncToPeers(entry={index=401})
+activate N1_PeerSync
+N1_PeerSync->N2_PeerSync: 2.2 PeerSyncRPC(term=1, entry={index=401}) [Direct TCP Socket P2P]
+activate N2_PeerSync
+N2_PeerSync->N2_WALMgr: 2.3 appendReplica\n(entry={index=401})
+activate N2_WALMgr
+N2_WALMgr->N2_Disk: 2.4 writeAndFsync(entry) \n[피어 로컬 디스크 fsync 영속화]
+activate N2_Disk
+N2_Disk-->N2_WALMgr: 피어 영속화 완료
+deactivate N2_Disk
+N2_WALMgr-->N2_PeerSync: 복제 완료
+deactivate N2_WALMgr
+N2_PeerSync-->N1_PeerSync: 2.5 PeerSyncResponse(Success=true)
+deactivate N2_PeerSync
+
+== 3. Quorum 커밋 확인 및 FSM 상태 확정 ==
+N1_PeerSync->N1_PeerSync: 과반수(Quorum) 복제 확인 (commitIndex=401)
+N1_PeerSync->N1_FSM: 3.1 commitAndApply(entry={index=401})
+activate N1_FSM
+N1_FSM->N1_FSM: 메모리 상태 적용 \n(In-Memory State Finalized)
+N1_FSM-->N1_WALMgr: 3.2 StateMutationCommitted
+deactivate N1_FSM
+deactivate N1_WALMgr
+
+== 4. [평시 운영] 비동기 Write-Behind RDBMS 반영 ==
+N1_PeerSync->N1_WB: 4.1 notifyCommit(entry={index=401})
+deactivate N1_PeerSync
+activate N1_WB
+note over N1_WB: 별도 메모리 버퍼 없이\n로컬 WAL의 커밋 구간 판독
+N1_WB->MetaDB: 4.2 asyncBatchInsert(entry={index=401}) [JDBC 비동기 전송]
+activate MetaDB
+MetaDB-->N1_WB: 4.3 DB Insert Success
+deactivate MetaDB
+deactivate N1_WB
+
+== 5. [DB 장애 후 복구 시] Reconciliation 정합성 복원 ==
+note over N1_Reconcile, MetaDB: DB 네트워크 단절 복구 감지 시
+activate N1_Reconcile
+N1_Reconcile->MetaDB: 5.1 queryLastCommittedIndex() [DB 마지막 동기화 인덱스 조회]
+activate MetaDB
+MetaDB-->N1_Reconcile: lastDbIndex=350 (미반영 Gap: 351 ~ 401)
+deactivate MetaDB
+
+N1_Reconcile->N1_Disk: 5.2 readWalGap(fromIndex=351, toIndex=401) [로컬 WAL 판독]
+activate N1_Disk
+N1_Disk-->N1_Reconcile: gapEntries (누락된 51개 WAL 엔트리 반환)
+deactivate N1_Disk
+
+N1_Reconcile->MetaDB: 5.3 bulkSyncReconciliation(gapEntries) [일괄 JDBC 트랜잭션 동기화]
+activate MetaDB
+MetaDB-->N1_Reconcile: 5.4 BulkSyncComplete (최종 데이터 정합성 복원)
+deactivate MetaDB
+deactivate N1_Reconcile
