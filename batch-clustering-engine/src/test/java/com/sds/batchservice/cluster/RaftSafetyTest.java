@@ -1,16 +1,29 @@
 package com.sds.batchservice.cluster;
 
 import com.sds.batchservice.cluster.consensus.RaftNode;
+import com.sds.batchservice.cluster.consensus.RaftTimings;
+import com.sds.batchservice.cluster.consensus.transport.Message;
+import com.sds.batchservice.cluster.consensus.transport.NetworkTransport;
+import com.sds.batchservice.cluster.fsm.ClusterStateMachine;
 import com.sds.batchservice.cluster.fsm.Command;
 import com.sds.batchservice.cluster.fsm.CommandResult;
+import com.sds.batchservice.cluster.fsm.CommandType;
+import com.sds.batchservice.cluster.fsm.LogEntry;
 import com.sds.batchservice.cluster.mock.VirtualCluster;
+import com.sds.batchservice.cluster.recovery.ExecutionStatusProvider.ExecutionStatus;
+import com.sds.batchservice.cluster.recovery.RecoveryCoordinator;
+import com.sds.batchservice.cluster.storage.RaftLogManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static com.sds.batchservice.cluster.ArchitectureVerificationTest.assertLogsConverged;
 import static com.sds.batchservice.cluster.ArchitectureVerificationTest.awaitLeader;
@@ -194,5 +207,193 @@ class RaftSafetyTest {
         } finally {
             cluster.shutdown();
         }
+    }
+
+    @Test
+    @DisplayName("재기동한 구 리더의 PreVote는 리더 생존 근거가 아니므로 다른 후보의 PreVote가 승인된다 (Pod 재생성 후 선출 교착 회귀)")
+    void preVoteFromRestartedLeaderIsNotLeaderContact(@TempDir Path dir) throws Exception {
+        List<Message> sent = new CopyOnWriteArrayList<>();
+        NetworkTransport capture = new NetworkTransport() {
+            @Override
+            public void send(Message message) {
+                sent.add(message);
+            }
+
+            @Override
+            public void registerReceiver(String nodeId, Consumer<Message> receiver) {
+            }
+
+            @Override
+            public void unregisterReceiver(String nodeId) {
+            }
+        };
+        RaftTimings timings = new RaftTimings(100L, 300L, 300L, 2_000L, 2_000L, 16);
+        RaftLogManager raftLog = new RaftLogManager(dir.resolve("node-2"), false);
+        RaftNode follower = new RaftNode("node-2", List.of("node-1", "node-2", "node-3"), capture, raftLog,
+                new ClusterStateMachine(), timings);
+        follower.start();
+        try {
+            // node-1이 term 1 리더로 Heartbeat 전송
+            follower.handleMessage(Message.appendEntries("node-1", "node-2", 1L, 0L, 0L, List.of(), 0L));
+            assertThat(follower.getLeaderId()).isEqualTo("node-1");
+            Thread.sleep(400L); // 최소 Election Timeout(300ms) 동안 리더 Heartbeat 없음
+
+            // node-1 Pod가 재생성되어 Follower로 기동한 뒤 PreVote 전송 → 리더 생존 근거가 아님
+            follower.handleMessage(Message.preVote("node-1", "node-2", 2L, 0L, 0L));
+            follower.handleMessage(Message.preVote("node-3", "node-2", 2L, 0L, 0L));
+
+            assertThat(sent)
+                    .filteredOn(m -> m.getType() == Message.Type.VOTE_RESPONSE && m.isPreVote() && "node-3".equals(m.getReceiverId()))
+                    .singleElement()
+                    .extracting(Message::isSuccess)
+                    .isEqualTo(true);
+        } finally {
+            follower.stop();
+            raftLog.close();
+        }
+    }
+
+    @Test
+    @DisplayName("신규 리더는 선출 직후 통신 이력이 오래된 팔로워를 DEAD로 판정하지 않는다 (롤링 업데이트 중 멤버십 오탐 회귀)")
+    void newLeaderDoesNotMarkQuietFollowerDeadRightAfterElection(@TempDir Path dir) throws Exception {
+        CapturingTransport transport = new CapturingTransport();
+        RaftTimings timings = new RaftTimings(100L, 300L, 300L, 1_000L, 2_000L, 16);
+        RaftLogManager raftLog = new RaftLogManager(dir.resolve("node-1"), false);
+        RaftNode node = new RaftNode("node-1", List.of("node-1", "node-2", "node-3"), transport, raftLog,
+                new ClusterStateMachine(), timings);
+        node.start();
+        try {
+            Thread.sleep(1_500L); // 팔로워 간에는 평소 통신하지 않으므로 node-3의 마지막 수신이 판정 시간(1초)보다 오래됨
+            electWithGrantFrom(node, transport, "node-2");
+            long readyAt = System.currentTimeMillis();
+            // node-2는 계속 응답 (Check-Quorum 유지), node-3은 무응답
+            ScheduledExecutorService node2 = Executors.newSingleThreadScheduledExecutor();
+            node2.scheduleAtFixedRate(() -> node.handleMessage(Message.appendResponse("node-2", "node-1",
+                    node.getCurrentTerm(), true, raftLog.lastIndex(), 0L)), 0L, 100L, TimeUnit.MILLISECONDS);
+            try {
+                Thread.sleep(500L);
+                assertThat(memberStatusEntries(raftLog)).as("MEMBER_STATUS proposals right after election").isEmpty();
+
+                // 리더 전환 시점부터 판정 시간(1초)이 지나도 응답이 없으면 DEAD로 제안 (장애 감지 유지)
+                await().atMost(3, TimeUnit.SECONDS).pollInterval(20, TimeUnit.MILLISECONDS).until(() ->
+                        memberStatusEntries(raftLog).stream().anyMatch(e -> "node-3".equals(e.getCommand().attr(Command.NODE))));
+                assertThat(System.currentTimeMillis() - readyAt).isGreaterThanOrEqualTo(900L);
+                assertThat(memberStatusEntries(raftLog)).noneMatch(e -> "node-2".equals(e.getCommand().attr(Command.NODE)));
+            } finally {
+                node2.shutdownNow();
+            }
+        } finally {
+            node.stop();
+            raftLog.close();
+        }
+    }
+
+    @Test
+    @DisplayName("DEAD로 기록된 노드가 리더가 되면 자신의 ALIVE를 커밋하여 멤버십을 복구한다")
+    void leaderMarkedDeadRestoresOwnMembership(@TempDir Path dir) throws Exception {
+        CapturingTransport transport = new CapturingTransport();
+        RaftTimings timings = new RaftTimings(100L, 300L, 300L, 2_000L, 2_000L, 16);
+        RaftLogManager raftLog = new RaftLogManager(dir.resolve("node-1"), false);
+        RaftNode node = new RaftNode("node-1", List.of("node-1", "node-2", "node-3"), transport, raftLog,
+                new ClusterStateMachine(), timings);
+        node.start();
+        try {
+            // 이전 리더 node-2가 node-1 재기동 중 커밋한 MEMBER_STATUS(DEAD) 복제
+            long now = System.currentTimeMillis();
+            node.handleMessage(Message.appendEntries("node-2", "node-1", 1L, 0L, 0L, List.of(
+                    new LogEntry(1L, 1L, now, Command.noOp()),
+                    new LogEntry(2L, 1L, now, Command.memberStatus("node-1", false))), 2L));
+            await().atMost(2, TimeUnit.SECONDS).until(() -> !node.getActiveMembers().contains("node-1"));
+
+            electWithGrantFrom(node, transport, "node-2");
+            await().atMost(2, TimeUnit.SECONDS).pollInterval(20, TimeUnit.MILLISECONDS).until(() ->
+                    memberStatusEntries(raftLog).stream().anyMatch(e -> e.getIndex() > 2L
+                            && "node-1".equals(e.getCommand().attr(Command.NODE)) && e.getCommand().boolAttr(Command.ALIVE)));
+
+            node.handleMessage(Message.appendResponse("node-2", "node-1", node.getCurrentTerm(), true, raftLog.lastIndex(), 0L));
+            await().atMost(2, TimeUnit.SECONDS).until(() -> node.getActiveMembers().contains("node-1"));
+        } finally {
+            node.stop();
+            raftLog.close();
+        }
+    }
+
+    @Test
+    @DisplayName("DEAD로 기록된 리더의 RecoveryCoordinator는 자신이 추적 중인 작업을 고립 작업으로 회수하지 않는다")
+    void recoveryDoesNotTreatLeaderItselfAsDead(@TempDir Path dir) throws Exception {
+        CapturingTransport transport = new CapturingTransport();
+        RaftTimings timings = new RaftTimings(100L, 300L, 300L, 2_000L, 2_000L, 16);
+        RaftLogManager raftLog = new RaftLogManager(dir.resolve("node-1"), false);
+        RaftNode node = new RaftNode("node-1", List.of("node-1", "node-2", "node-3"), transport, raftLog,
+                new ClusterStateMachine(), timings);
+        RecoveryCoordinator recovery = new RecoveryCoordinator(node, (executionId, jobId) -> ExecutionStatus.NOT_FOUND,
+                60_000L, 60_000L);
+        node.start();
+        recovery.start();
+        try {
+            // node-1이 JOB-SELF를 인출해 추적 중인 상태에서 MEMBER_STATUS(DEAD)가 커밋됨
+            long now = System.currentTimeMillis();
+            node.handleMessage(Message.appendEntries("node-2", "node-1", 1L, 0L, 0L, List.of(
+                    new LogEntry(1L, 1L, now, Command.noOp()),
+                    new LogEntry(2L, 1L, now, Command.enqueue("JOB-SELF", false)),
+                    new LogEntry(3L, 1L, now, Command.dequeue("node-1", 60_000L)),
+                    new LogEntry(4L, 1L, now, Command.memberStatus("node-1", false))), 4L));
+            await().atMost(2, TimeUnit.SECONDS).until(() -> node.getStateMachine().getQueue().getInFlight("JOB-SELF") != null
+                    && !node.getActiveMembers().contains("node-1"));
+
+            electWithGrantFrom(node, transport, "node-2");
+            recovery.scan();
+            Thread.sleep(500L);
+
+            assertThat(entriesAfter(raftLog, 4L)).noneMatch(e -> e.getType() == CommandType.QUEUE_REQUEUE
+                    || e.getType() == CommandType.QUEUE_REASSIGN || e.getType() == CommandType.JOURNAL_RECORD);
+            assertThat(recovery.getActions()).isEmpty();
+            assertThat(node.getStateMachine().getQueue().getInFlight("JOB-SELF").worker()).isEqualTo("node-1");
+        } finally {
+            recovery.stop();
+            node.stop();
+            raftLog.close();
+        }
+    }
+
+    // ─── 헬퍼 ─────────────────────────────────────────────────────────────────
+    /** 송신 메시지를 기록하는 전송 계층 (RaftNode 단독 시험용). */
+    private static final class CapturingTransport implements NetworkTransport {
+        private final List<Message> sent = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void send(Message message) {
+            sent.add(message);
+        }
+
+        @Override
+        public void registerReceiver(String nodeId, Consumer<Message> receiver) {
+        }
+
+        @Override
+        public void unregisterReceiver(String nodeId) {
+        }
+    }
+
+    /** voter의 PreVote·RequestVote 승인과 NO_OP 복제 응답을 주입하여 node를 서비스 가능한 리더로 만듭니다. */
+    private static void electWithGrantFrom(RaftNode node, CapturingTransport transport, String voter) {
+        long term = node.getCurrentTerm() + 1;
+        await().atMost(3, TimeUnit.SECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(() -> transport.sent.stream()
+                .anyMatch(m -> m.getType() == Message.Type.PRE_VOTE && m.getTerm() == term));
+        node.handleMessage(Message.voteResponse(voter, node.getNodeId(), term, true, true));
+        await().atMost(3, TimeUnit.SECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(() -> node.getCurrentTerm() == term);
+        node.handleMessage(Message.voteResponse(voter, node.getNodeId(), term, true, false));
+        await().atMost(3, TimeUnit.SECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(node::isLeader);
+        node.handleMessage(Message.appendResponse(voter, node.getNodeId(), term, true, node.getRaftLog().lastIndex(), 0L));
+        await().atMost(3, TimeUnit.SECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(node::isLeaderReady);
+    }
+
+    private static List<LogEntry> memberStatusEntries(RaftLogManager raftLog) {
+        return entriesAfter(raftLog, 0L).stream().filter(e -> e.getType() == CommandType.MEMBER_STATUS).toList();
+    }
+
+    private static List<LogEntry> entriesAfter(RaftLogManager raftLog, long index) {
+        long last = raftLog.lastIndex();
+        return last <= index ? List.of() : raftLog.slice(index + 1, last, Integer.MAX_VALUE);
     }
 }

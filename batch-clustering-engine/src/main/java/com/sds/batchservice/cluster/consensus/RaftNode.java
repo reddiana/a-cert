@@ -74,6 +74,10 @@ public class RaftNode {
     private long lastApplied;
     private long electionDeadline;
     private final Map<String, Long> lastHeardFrom = new HashMap<>();
+    /** 현재 리더의 AppendEntries 마지막 수신 시각. PreVote 거부(리더 생존) 판정에 사용합니다. */
+    private long lastLeaderContact = NEVER;
+    /** {@link #lastLeaderContact}를 보낸 리더 ID. 리더 전환 시 구 리더의 무응답 판정 기준으로 사용합니다. */
+    private String lastContactedLeaderId;
 
     // ─── 선출 상태 ────────────────────────────────────────────────────────────
     private long preVoteTerm;
@@ -245,6 +249,11 @@ public class RaftNode {
 
     /** 팔로워 무응답 2초 → DEAD, 따라잡기 완료 → ALIVE 를 로그로 커밋 (Scenario 3, QAS-04). */
     private void detectMemberChangesLocked(long now, List<Runnable> after) {
+        // 재기동 중 DEAD로 커밋된 노드가 리더가 된 경우: 멤버십 복구는 리더만 제안하므로 자신의 ALIVE를 제안
+        if (!fsm.isAlive(nodeId) && pendingMemberProposals.add(nodeId)) {
+            log.info("[{}] Leader is marked DEAD in committed membership. Proposing MEMBER_STATUS ALIVE for itself.", nodeId);
+            after.add(() -> proposeMemberStatus(nodeId, true));
+        }
         for (String p : peers) {
             boolean unresponsive = now - lastAck.getOrDefault(p, NEVER) >= timings.memberFailureTimeoutMs();
             boolean markedDead = !fsm.isAlive(p);
@@ -306,9 +315,14 @@ public class RaftNode {
         }
     }
 
+    /**
+     * 리더 생존은 리더의 AppendEntries 수신으로만 판정합니다. 리더 ID로 PreVote가 오면 해당 노드는 재기동 등으로
+     * 더 이상 리더가 아니므로 생존 근거로 쓰지 않습니다 (Pod 재생성 후 선출 교착 방지).
+     */
     private void handlePreVoteLocked(Message m, long now) {
         boolean leaderAlive = role == RaftRole.LEADER
-                || (leaderId != null && now - lastHeardFrom.getOrDefault(leaderId, NEVER) < timings.electionTimeoutMinMs());
+                || (leaderId != null && !leaderId.equals(m.getSenderId())
+                && now - lastLeaderContact < timings.electionTimeoutMinMs());
         boolean granted = m.getTerm() > currentTerm && !leaderAlive
                 && isUpToDateLocked(m.getLastLogIndex(), m.getLastLogTerm());
         transport.send(Message.voteResponse(nodeId, m.getSenderId(), m.getTerm(), granted, true));
@@ -368,7 +382,9 @@ public class RaftNode {
             matchIndex.put(p, 0L);
             sentUpTo.put(p, last);
             lastSentCommit.put(p, -1L);
-            lastAck.put(p, lastHeardFrom.getOrDefault(p, now));
+            // 무응답 판정 기준: 구 리더는 Heartbeat를 받던 마지막 시각(크래시 시점과 근접, Scenario 2 복구 지연 방지),
+            // 다른 팔로워는 평소 통신하지 않아 수신 이력이 오래될 수 있으므로 리더 전환 시점부터 계산 (정상 노드 오탐 방지)
+            lastAck.put(p, p.equals(lastContactedLeaderId) ? Math.min(lastLeaderContact, now) : now);
         }
         log.info("[{}] Promoted to LEADER for term {} (lastIndex={}).", nodeId, currentTerm, last);
         // 현재 term의 NO_OP 커밋으로 이전 term 엔트리 확정 (Scenario 2 3단계)
@@ -632,6 +648,8 @@ public class RaftNode {
             becomeFollowerLocked(currentTerm, m.getSenderId());
         }
         leaderId = m.getSenderId();
+        lastLeaderContact = now;
+        lastContactedLeaderId = leaderId;
         resetElectionTimerLocked(now);
 
         long prev = m.getPrevLogIndex();

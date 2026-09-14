@@ -93,6 +93,7 @@ public class RecoveryCoordinator {
         if (!raftNode.isLeaderReady()) return;
         ClusterStateMachine fsm = raftNode.getStateMachine();
         Set<String> dead = fsm.getDeadMembers();
+        dead.remove(raftNode.getNodeId()); // 스캔 중인 리더 자신은 생존 (자신의 ALIVE 커밋 전 자기 작업 회수 방지)
         long now = raftNode.wallClockMillis(); // proposedAt과 동일한 시계로 만료 판정
 
         for (LockInfo lock : fsm.getLock().snapshot()) {

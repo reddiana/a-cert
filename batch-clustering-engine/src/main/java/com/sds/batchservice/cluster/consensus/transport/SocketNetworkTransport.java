@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -29,6 +30,8 @@ import java.util.function.Consumer;
  *   <li>피어별 영속 연결 1개와 전용 송신 스레드 → 메시지 순서 보장, 연결 비용 제거</li>
  *   <li>길이 프리픽스 바이너리 프레임 ({@link Message#writeTo}) — Java 기본 직렬화 미사용</li>
  *   <li>연결 수립 시 클러스터 공유 토큰 핸드셰이크, 발신자 ID 위조 프레임 차단</li>
+ *   <li>송신 연결 회복: 피어의 연결 종료(FIN)를 감시하고, 송신 후 피어 수신이 {@value #PEER_SILENCE_TIMEOUT_MS}ms
+ *       동안 없으면 재연결 (Pod 재생성으로 구 IP에 남은 반개방 연결에 메시지가 유실되는 것을 방지)</li>
  * </ul>
  * 전송 구간 암호화가 필요하면 서비스 메시(mTLS) 또는 전용 네트워크 정책을 함께 적용합니다.
  */
@@ -39,6 +42,9 @@ public class SocketNetworkTransport implements NetworkTransport {
     private static final int MAX_FRAME_BYTES = 64 * 1024 * 1024;
     private static final int OUTBOUND_QUEUE_CAPACITY = 10_000;
     private static final int CONNECT_TIMEOUT_MS = 500;
+    /** 송신 이후 피어로부터 수신이 없을 때 송신 경로 단절로 판정하는 시간 (Raft RPC는 모두 요청·응답 쌍) */
+    static final long PEER_SILENCE_TIMEOUT_MS = 3_000L;
+    private static final long IDLE_CHECK_INTERVAL_MS = 250L;
 
     private final String localNodeId;
     private final int port;
@@ -46,6 +52,8 @@ public class SocketNetworkTransport implements NetworkTransport {
     private final byte[] authToken;
     private final ConcurrentHashMap<String, Consumer<Message>> receivers = new ConcurrentHashMap<>();
     private final Map<String, PeerConnection> outbound = new ConcurrentHashMap<>();
+    /** 피어별 마지막 수신 프레임 시각 (단조 시계, ms) */
+    private final Map<String, Long> lastInboundAt = new ConcurrentHashMap<>();
     private final ExecutorService ioPool = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "raft-io");
         t.setDaemon(true);
@@ -90,6 +98,10 @@ public class SocketNetworkTransport implements NetworkTransport {
         outbound.values().forEach(PeerConnection::close);
         ioPool.shutdownNow();
         log.info("[{}] SocketNetworkTransport stopped.", localNodeId);
+    }
+
+    private static long monotonicMs() {
+        return System.nanoTime() / 1_000_000L;
     }
 
     public int getLocalPort() {
@@ -152,6 +164,7 @@ public class SocketNetworkTransport implements NetworkTransport {
                 if (!remoteNode.equals(message.getSenderId())) {
                     throw new IOException("sender id mismatch: " + message.getSenderId());
                 }
+                lastInboundAt.put(remoteNode, monotonicMs());
                 Consumer<Message> receiver = receivers.get(localNodeId);
                 if (receiver != null) {
                     receiver.accept(message);
@@ -200,13 +213,30 @@ public class SocketNetworkTransport implements NetworkTransport {
                     out.write(authToken);
                     out.flush();
                     backoff = 100L;
+                    long connectedAt = monotonicMs();
+                    long lastWriteAt = Long.MIN_VALUE;
+                    watchPeerClose(s);
                     while (running) {
-                        writeFrame(out, queue.take());
-                        Message next;
-                        while ((next = queue.poll()) != null) {
-                            writeFrame(out, next);
+                        Message first = queue.poll(IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
+                        if (first != null) {
+                            writeFrame(out, first);
+                            Message next;
+                            while ((next = queue.poll()) != null) {
+                                writeFrame(out, next);
+                            }
+                            out.flush();
+                            lastWriteAt = monotonicMs();
                         }
-                        out.flush();
+                        if (s.isClosed()) {
+                            throw new IOException("closed by peer");
+                        }
+                        long heardAt = Math.max(connectedAt, lastInboundAt.getOrDefault(peerId, Long.MIN_VALUE));
+                        long silentMs = monotonicMs() - heardAt;
+                        if (lastWriteAt > heardAt && silentMs >= PEER_SILENCE_TIMEOUT_MS) {
+                            log.info("[{}] No traffic from [{}] for {}ms after sending. Reconnecting to {}:{}.",
+                                    localNodeId, peerId, silentMs, host, peerPort);
+                            throw new IOException("peer silent for " + silentMs + "ms");
+                        }
                     }
                 } catch (InterruptedException e) {
                     return;
@@ -221,6 +251,24 @@ public class SocketNetworkTransport implements NetworkTransport {
                     backoff = Math.min(backoff * 2, 1_000L);
                 }
             }
+        }
+
+        /**
+         * 피어는 송신 연결로 데이터를 보내지 않으므로 read 반환(-1)이나 오류는 연결 종료를 의미합니다.
+         * 송신만 하는 소켓은 피어의 FIN을 인지하지 못해, 피어 IP가 사라지면 쓰기가 오류 없이 유실되기 때문입니다.
+         */
+        private void watchPeerClose(Socket s) {
+            ioPool.submit(() -> {
+                try {
+                    s.getInputStream().read();
+                } catch (IOException ignored) {
+                    // 종료 또는 로컬 close
+                }
+                if (running && socket == s) {
+                    log.info("[{}] Connection to [{}] {}:{} closed by peer. Reconnecting.", localNodeId, peerId, host, peerPort);
+                    close();
+                }
+            });
         }
 
         private void writeFrame(DataOutputStream out, Message m) throws IOException {
