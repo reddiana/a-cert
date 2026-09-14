@@ -8,7 +8,7 @@
 #
 # 단계
 #   1) 병합   : tools/merge-spec.mjs (Advanced Merger 플러그인 동작 재현)
-#   2) 후처리 : 폴더 헤딩 공백 보정, "Design Approach N - " -> "Design Approach N: ",
+#   2) 후처리 : 폴더 헤딩 공백 보정, "Design Approach N - " -> "Design Approach N: "(이미지 임베드 줄 제외),
 #               Obsidian 이미지/링크(![[..]], [[..]]) 변환
 #   2-1) SVG  : draw.io SVG 를 Chrome 으로 PNG 렌더링(svg2png.mjs)
 #   3) pandoc : template.docx 스타일 적용, 표 셀 <br> 줄바꿈(br.lua), mermaid 렌더링(mermaid.lua)
@@ -58,7 +58,7 @@ fi
 #   - [[문서|별칭]] -> 별칭, [[문서]] -> 문서 : Word 에서 깨지는 내부 링크는 텍스트로
 sed -i -E '
 	s/^(#+)([1-9])/\1 \2/
-	s/Design Approach ([1-9]) - /Design Approach \1: /g
+	/!\[\[/!s/Design Approach ([1-9]) - /Design Approach \1: /g
 	s/!\[\[([^]|]+)(\|[^]]*)?\]\]/![](<\1>)/g
 	s/\[\[[^]|]+\|([^]]+)\]\]/\1/g
 	s/\[\[([^]]+)\]\]/\1/g

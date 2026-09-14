@@ -1,0 +1,64 @@
+participantgroup Batch Node A (Leader Node)
+participant "Batch Leader Engine & Scheduler" as NodeA_Engine
+participant "Distributed Concurrency Controller" as NodeA_LockMgr
+end
+
+participantgroup Shared Meta RDBMS (Oracle/MySQL/PostgreSQL)
+participant "BATCH_CLUSTER_MEMBER\n(Heartbeat & Member Status)" as DB_MemberTable
+participant "BATCH_LOCK\n(Pessimistic / Lease Lock)" as DB_LockTable
+participant "BATCH_QUEUE\n(Distributed Job Queue)" as DB_QueueTable
+end
+
+
+participantgroup Batch Node B (Worker Node)
+participant "Heartbeat & Queue Consumer" as NodeB_Consumer
+participant "Batch Worker Execution Engine" as NodeB_Engine
+end
+
+
+group Phase 1: Node A Heartbeat, Leader Lock Acquisition & Job Registration
+NodeA_Engine->NodeA_LockMgr: 1. Initiate Heartbeat & Leader Lock Renewal
+activate NodeA_LockMgr
+
+NodeA_LockMgr->DB_MemberTable: 2. UPDATE \nBATCH_CLUSTER_MEMBER \n(Role: LEADER, Status: UP)
+activate DB_MemberTable
+DB_MemberTable-->NodeA_LockMgr: Heartbeat Updated
+deactivate DB_MemberTable
+
+NodeA_LockMgr->DB_LockTable: 3. UPDATE BATCH_LOCK \nSET owner_node_id='NodeA' \n(ACID Lease Lock)
+activate DB_LockTable
+DB_LockTable-->NodeA_LockMgr: Lease Lock Extended
+deactivate DB_LockTable
+deactivate NodeA_LockMgr
+
+NodeA_Engine->DB_QueueTable: 4. INSERT INTO \nBATCH_QUEUE \n(Status: PENDING)
+activate DB_QueueTable
+DB_QueueTable-->NodeA_Engine: Job Registered
+deactivate DB_QueueTable
+end
+
+group Phase 2: Node B Worker Heartbeat, Queue Polling & Execution
+NodeB_Consumer->DB_MemberTable: 5. UPDATE \nBATCH_CLUSTER_MEMBER \n(Role: WORKER, Status: UP)
+activate NodeB_Consumer
+activate DB_MemberTable
+DB_MemberTable-->NodeB_Consumer: Member Status Updated
+deactivate DB_MemberTable
+
+NodeB_Consumer->DB_QueueTable: 6. SELECT & UPDATE \nBATCH_QUEUE \n(FOR UPDATE SKIP LOCKED)
+activate DB_QueueTable
+DB_QueueTable-->NodeB_Consumer: Job Claimed (#Job-101)
+deactivate DB_QueueTable
+
+NodeB_Consumer->NodeB_Engine: 7. Trigger Chunk Execution
+activate NodeB_Engine
+NodeB_Engine->NodeB_Engine: 8. Execute \nBatch Business Logic \n(Chunk Processing)
+NodeB_Engine-->NodeB_Consumer: Chunk Execution Completed
+deactivate NodeB_Engine
+
+NodeB_Consumer->DB_QueueTable: 9. UPDATE \nBATCH_QUEUE \nSET status='DONE'
+activate DB_QueueTable
+DB_QueueTable-->NodeB_Consumer: Job Status Updated \n(DONE)
+deactivate DB_QueueTable
+deactivate NodeB_Consumer
+
+end
