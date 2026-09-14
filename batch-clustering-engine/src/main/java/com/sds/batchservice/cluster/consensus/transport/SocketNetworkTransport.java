@@ -45,6 +45,7 @@ public class SocketNetworkTransport implements NetworkTransport {
     /** 송신 이후 피어로부터 수신이 없을 때 송신 경로 단절로 판정하는 시간 (Raft RPC는 모두 요청·응답 쌍) */
     static final long PEER_SILENCE_TIMEOUT_MS = 3_000L;
     private static final long IDLE_CHECK_INTERVAL_MS = 250L;
+    private static final long NOT_AWAITING = Long.MIN_VALUE;
 
     private final String localNodeId;
     private final int port;
@@ -213,8 +214,8 @@ public class SocketNetworkTransport implements NetworkTransport {
                     out.write(authToken);
                     out.flush();
                     backoff = 100L;
-                    long connectedAt = monotonicMs();
-                    long lastWriteAt = Long.MIN_VALUE;
+                    // 응답 대기를 시작한 송신 시각. 이후 해당 피어의 수신이 있으면 해제 (유휴 기간은 무수신 판정에 포함하지 않음)
+                    long awaitingSince = NOT_AWAITING;
                     watchPeerClose(s);
                     while (running) {
                         Message first = queue.poll(IDLE_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
@@ -225,17 +226,22 @@ public class SocketNetworkTransport implements NetworkTransport {
                                 writeFrame(out, next);
                             }
                             out.flush();
-                            lastWriteAt = monotonicMs();
+                            if (awaitingSince == NOT_AWAITING) {
+                                awaitingSince = monotonicMs();
+                            }
                         }
                         if (s.isClosed()) {
                             throw new IOException("closed by peer");
                         }
-                        long heardAt = Math.max(connectedAt, lastInboundAt.getOrDefault(peerId, Long.MIN_VALUE));
-                        long silentMs = monotonicMs() - heardAt;
-                        if (lastWriteAt > heardAt && silentMs >= PEER_SILENCE_TIMEOUT_MS) {
-                            log.info("[{}] No traffic from [{}] for {}ms after sending. Reconnecting to {}:{}.",
-                                    localNodeId, peerId, silentMs, host, peerPort);
-                            throw new IOException("peer silent for " + silentMs + "ms");
+                        if (awaitingSince != NOT_AWAITING) {
+                            long now = monotonicMs();
+                            if (lastInboundAt.getOrDefault(peerId, Long.MIN_VALUE) >= awaitingSince) {
+                                awaitingSince = NOT_AWAITING;
+                            } else if (now - awaitingSince >= PEER_SILENCE_TIMEOUT_MS) {
+                                log.info("[{}] No traffic from [{}] for {}ms after sending. Reconnecting to {}:{}.",
+                                        localNodeId, peerId, now - awaitingSince, host, peerPort);
+                                throw new IOException("peer silent for " + (now - awaitingSince) + "ms after sending");
+                            }
                         }
                     }
                 } catch (InterruptedException e) {

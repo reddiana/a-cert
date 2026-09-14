@@ -34,11 +34,11 @@ public class BatchClusterProperties {
     private boolean allowSingleNode = false;
     private String clusterId = "batch-cluster";
 
-    private long heartbeatIntervalMs = 500L;
+    private long heartbeatIntervalMs = 250L;
     private long electionTimeoutMinMs = 1_500L;
     private long electionTimeoutMaxMs = 2_000L;
     private long memberFailureTimeoutMs = 2_000L;
-    private long clientTimeoutMs = 2_000L;
+    private long clientTimeoutMs = 3_000L;
     private int maxBatchEntries = 256;
 
     private long queueVisibilityTimeoutMs = 30_000L;

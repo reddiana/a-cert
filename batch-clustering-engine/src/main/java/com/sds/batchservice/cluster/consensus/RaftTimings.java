@@ -3,11 +3,11 @@ package com.sds.batchservice.cluster.consensus;
 /**
  * Raft 타이밍 파라미터 (5.3.2 공통 런타임 규약 6).
  *
- * @param heartbeatIntervalMs     리더 Heartbeat 주기 (기본 500ms)
+ * @param heartbeatIntervalMs     리더 Heartbeat 주기 (기본 250ms, Election Timeout 하한의 1/6)
  * @param electionTimeoutMinMs    Election Timeout 하한 (기본 1,500ms, GC STW 1초 + Heartbeat 여유)
  * @param electionTimeoutMaxMs    Election Timeout 상한 (기본 2,000ms, QAS-05 감지 2초)
  * @param memberFailureTimeoutMs  팔로워 무응답 장애 판정 시간 (기본 2,000ms, QAS-04)
- * @param clientTimeoutMs         클라이언트 제안 1회 대기 타임아웃 (기본 2,000ms)
+ * @param clientTimeoutMs         클라이언트 제안 1회 대기 타임아웃 (기본 3,000ms, 리더 교체 최대 소요 시간)
  * @param maxBatchEntries         AppendEntries 1회 최대 엔트리 수 (Group Commit)
  */
 public record RaftTimings(long heartbeatIntervalMs,
@@ -29,6 +29,6 @@ public record RaftTimings(long heartbeatIntervalMs,
     }
 
     public static RaftTimings defaults() {
-        return new RaftTimings(500L, 1_500L, 2_000L, 2_000L, 2_000L, 256);
+        return new RaftTimings(250L, 1_500L, 2_000L, 2_000L, 3_000L, 256);
     }
 }

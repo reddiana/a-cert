@@ -3,16 +3,21 @@ package com.sds.batchservice.cluster.consensus.transport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 송신 연결 회복 회귀 테스트 (K8s Pod 재생성 시 구 IP로의 반개방 연결에 메시지가 유실되던 결함).
@@ -86,6 +91,65 @@ class SocketNetworkTransportTest {
                 transport.stop();
             }
         }
+    }
+
+    @Test
+    @DisplayName("오래 송신이 없던 연결에서 메시지를 보낸 직후에는 재연결하지 않고, 송신 시점부터 무수신 시간을 판정한다")
+    void idleConnectionDoesNotReconnectRightAfterSend() throws Exception {
+        try (ServerSocket peer = new ServerSocket(0)) {
+            SocketNetworkTransport transport = new SocketNetworkTransport("node-a", 0,
+                    Map.of("node-b", "127.0.0.1:" + peer.getLocalPort()), "token");
+            transport.start();
+            try {
+                peer.setSoTimeout(5_000);
+                Socket first = peer.accept();
+                assertThat(readHandshakeNodeId(first)).isEqualTo("node-a");
+                drainInBackground(first);
+                Thread.sleep(SocketNetworkTransport.PEER_SILENCE_TIMEOUT_MS + 500L); // 판정 시간보다 오래 유휴 (팔로워 간 연결)
+
+                transport.send(Message.preVote("node-a", "node-b", 1L, 0L, 0L));
+                Thread.sleep(1_000L);
+                // 피어가 1초 뒤 자신의 송신 연결로 응답
+                try (Socket reply = new Socket("127.0.0.1", transport.getLocalPort())) {
+                    DataOutputStream out = new DataOutputStream(reply.getOutputStream());
+                    byte[] token = "token".getBytes(StandardCharsets.UTF_8);
+                    out.writeInt(MAGIC);
+                    out.writeUTF("node-b");
+                    out.writeInt(token.length);
+                    out.write(token);
+                    writeFrame(out, Message.voteResponse("node-b", "node-a", 1L, true, true));
+                    out.flush();
+
+                    peer.setSoTimeout(2_500);
+                    assertThatThrownBy(peer::accept).as("no reconnect while peer responds")
+                            .isInstanceOf(SocketTimeoutException.class);
+                }
+                first.close();
+            } finally {
+                transport.stop();
+            }
+        }
+    }
+
+    private static void drainInBackground(Socket socket) throws IOException {
+        socket.setSoTimeout(0);
+        Thread drain = new Thread(() -> {
+            try {
+                while (socket.getInputStream().read() >= 0) {
+                    // 수신 데이터 폐기
+                }
+            } catch (IOException ignored) {
+            }
+        });
+        drain.setDaemon(true);
+        drain.start();
+    }
+
+    private static void writeFrame(DataOutputStream out, Message message) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        message.writeTo(new DataOutputStream(bytes));
+        out.writeInt(bytes.size());
+        bytes.writeTo(out);
     }
 
     private static String readHandshakeNodeId(Socket socket) throws IOException {

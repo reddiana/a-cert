@@ -1,6 +1,7 @@
 package com.sds.batchservice.cluster;
 
 import com.sds.batchservice.cluster.consensus.RaftNode;
+import com.sds.batchservice.cluster.consensus.RaftRole;
 import com.sds.batchservice.cluster.consensus.RaftTimings;
 import com.sds.batchservice.cluster.consensus.transport.Message;
 import com.sds.batchservice.cluster.consensus.transport.NetworkTransport;
@@ -356,7 +357,62 @@ class RaftSafetyTest {
         }
     }
 
+    @Test
+    @DisplayName("Split Vote로 과반을 얻지 못하면 Election Timeout을 기다리지 않고 150~300ms 난수 대기 후 재선출한다 (QAS-05 최악 조건)")
+    void splitVoteRetriesAfterShortRandomBackoff(@TempDir Path dir) throws Exception {
+        CapturingTransport transport = new CapturingTransport();
+        RaftTimings timings = new RaftTimings(100L, 1_500L, 2_000L, 2_000L, 2_000L, 16);
+        RaftLogManager raftLog = new RaftLogManager(dir.resolve("node-1"), false);
+        RaftNode node = new RaftNode("node-1", List.of("node-1", "node-2", "node-3"), transport, raftLog,
+                new ClusterStateMachine(), timings);
+        node.start();
+        try {
+            becomeCandidate(node, transport, "node-2");
+            // 리더 장애 후 생존 2노드가 동시에 출마: node-2는 같은 term에 자신에게 투표하여 거절, node-3은 장애로 무응답
+            long rejectedAt = System.currentTimeMillis();
+            node.handleMessage(Message.voteResponse("node-2", "node-1", 1L, false, false));
+
+            await().atMost(1_500L, TimeUnit.MILLISECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(() -> transport.sent.stream()
+                    .anyMatch(m -> m.getType() == Message.Type.PRE_VOTE && m.getTerm() == 2L));
+            long retryElapsed = System.currentTimeMillis() - rejectedAt;
+            assertThat(retryElapsed).as("retry before Election Timeout (1,500ms)").isLessThan(1_000L);
+        } finally {
+            node.stop();
+            raftLog.close();
+        }
+    }
+
+    @Test
+    @DisplayName("거절 없이 투표 응답만 지연·유실되면 Election Timeout을 유지하여 선출을 반복하지 않는다 (고지연 환경)")
+    void candidateWithoutRejectionKeepsElectionTimeout(@TempDir Path dir) throws Exception {
+        CapturingTransport transport = new CapturingTransport();
+        RaftTimings timings = new RaftTimings(100L, 1_500L, 2_000L, 2_000L, 2_000L, 16);
+        RaftLogManager raftLog = new RaftLogManager(dir.resolve("node-1"), false);
+        RaftNode node = new RaftNode("node-1", List.of("node-1", "node-2", "node-3"), transport, raftLog,
+                new ClusterStateMachine(), timings);
+        node.start();
+        try {
+            becomeCandidate(node, transport, "node-2");
+            Thread.sleep(1_000L);
+
+            assertThat(transport.sent).noneMatch(m -> m.getType() == Message.Type.PRE_VOTE && m.getTerm() == 2L);
+            assertThat(node.getCurrentTerm()).isEqualTo(1L);
+        } finally {
+            node.stop();
+            raftLog.close();
+        }
+    }
+
     // ─── 헬퍼 ─────────────────────────────────────────────────────────────────
+    /** voter의 PreVote 승인을 주입하여 node를 term 1 후보(RequestVote 송신 완료)로 만듭니다. */
+    private static void becomeCandidate(RaftNode node, CapturingTransport transport, String voter) {
+        await().atMost(3, TimeUnit.SECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(() -> transport.sent.stream()
+                .anyMatch(m -> m.getType() == Message.Type.PRE_VOTE && m.getTerm() == 1L));
+        node.handleMessage(Message.voteResponse(voter, node.getNodeId(), 1L, true, true));
+        await().atMost(1, TimeUnit.SECONDS).pollInterval(10, TimeUnit.MILLISECONDS).until(() ->
+                node.getCurrentTerm() == 1L && node.getRole() == RaftRole.CANDIDATE);
+    }
+
     /** 송신 메시지를 기록하는 전송 계층 (RaftNode 단독 시험용). */
     private static final class CapturingTransport implements NetworkTransport {
         private final List<Message> sent = new CopyOnWriteArrayList<>();

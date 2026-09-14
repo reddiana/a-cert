@@ -59,6 +59,11 @@ public class RaftNode {
 
     /** 응답 이력이 없는 피어의 기준 시각 (단조 시계 원점과 무관하게 "오래전"으로 취급). */
     private static final long NEVER = Long.MIN_VALUE / 2;
+    /** Split Vote 판정: 투표 거절을 받은 뒤 선출 라운드 시작부터 이 시간 안에 과반을 얻지 못하면 재시도 대기로 전환 */
+    private static final long ELECTION_ROUND_TIMEOUT_MS = 200L;
+    /** Split Vote 재시도 대기 난수 범위 (5.3.2 공통 런타임 규약 6) */
+    private static final long SPLIT_VOTE_BACKOFF_MIN_MS = 150L;
+    private static final long SPLIT_VOTE_BACKOFF_MAX_MS = 300L;
 
     /** Raft 상태 보호 락. 순서: lock → fsm → raftLog */
     private final Object lock = new Object();
@@ -82,6 +87,9 @@ public class RaftNode {
     // ─── 선출 상태 ────────────────────────────────────────────────────────────
     private long preVoteTerm;
     private final Set<String> preVoteGrants = new HashSet<>();
+    private final Set<String> votesRejected = new HashSet<>();
+    private long electionStartedAt;
+    private boolean splitVoteRetryScheduled;
     private final Set<String> votesGranted = new HashSet<>();
 
     // ─── 리더 상태 ────────────────────────────────────────────────────────────
@@ -218,8 +226,13 @@ public class RaftNode {
                 if (leadershipReady) {
                     detectMemberChangesLocked(now, after);
                 }
-            } else if (now >= electionDeadline) {
-                startPreVoteLocked(now);
+            } else {
+                if (role == RaftRole.CANDIDATE) {
+                    scheduleSplitVoteRetryLocked(now);
+                }
+                if (now >= electionDeadline) {
+                    startPreVoteLocked(now);
+                }
             }
             if (now - lastCommitPersistAt >= 1_000L) {
                 lastCommitPersistAt = now;
@@ -302,6 +315,9 @@ public class RaftNode {
         preVoteTerm = 0;
         votesGranted.clear();
         votesGranted.add(nodeId);
+        votesRejected.clear();
+        electionStartedAt = now;
+        splitVoteRetryScheduled = false;
         resetElectionTimerLocked(now);
         log.info("[{}] Started Leader Election for term {}.", nodeId, currentTerm);
         if (votesGranted.size() >= quorum()) {
@@ -354,13 +370,36 @@ public class RaftNode {
             }
             return;
         }
-        if (role == RaftRole.CANDIDATE && m.getTerm() == currentTerm && m.isSuccess()) {
-            votesGranted.add(m.getSenderId());
-            log.info("[{}] Received vote from [{}] ({}/{}).", nodeId, m.getSenderId(), votesGranted.size(), quorum());
-            if (votesGranted.size() >= quorum()) {
-                becomeLeaderLocked(now);
+        if (role == RaftRole.CANDIDATE && m.getTerm() == currentTerm) {
+            if (m.isSuccess()) {
+                votesGranted.add(m.getSenderId());
+                log.info("[{}] Received vote from [{}] ({}/{}).", nodeId, m.getSenderId(), votesGranted.size(), quorum());
+                if (votesGranted.size() >= quorum()) {
+                    becomeLeaderLocked(now);
+                }
+            } else {
+                votesRejected.add(m.getSenderId());
+                scheduleSplitVoteRetryLocked(now);
             }
         }
+    }
+
+    /**
+     * Split Vote: 경쟁 후보의 거절을 받았고 선출 라운드 시간(200ms) 안에 과반을 얻지 못했거나 남은 응답을 모두 받아도 과반이
+     * 불가능하면, Election Timeout 전체를 기다리지 않고 150~300ms 난수 대기 후 PreVote부터 재시도합니다.
+     * 거절 없이 응답만 없는 경우(고지연·장애)는 Election Timeout을 유지하여 선출 반복을 막습니다.
+     */
+    private void scheduleSplitVoteRetryLocked(long now) {
+        if (splitVoteRetryScheduled || votesRejected.isEmpty() || votesGranted.size() >= quorum()) return;
+        int undecided = allNodeIds.size() - votesGranted.size() - votesRejected.size();
+        boolean quorumImpossible = votesGranted.size() + undecided < quorum();
+        if (!quorumImpossible && now - electionStartedAt < ELECTION_ROUND_TIMEOUT_MS) return;
+        splitVoteRetryScheduled = true;
+        long backoff = SPLIT_VOTE_BACKOFF_MIN_MS
+                + random.nextInt((int) (SPLIT_VOTE_BACKOFF_MAX_MS - SPLIT_VOTE_BACKOFF_MIN_MS) + 1);
+        electionDeadline = Math.min(electionDeadline, now + backoff);
+        log.info("[{}] Split vote in term {} (granted {}/{}, rejected by {}). Retrying election in {}ms.",
+                nodeId, currentTerm, votesGranted.size(), quorum(), votesRejected, backoff);
     }
 
     /** 후보 로그가 자신보다 같거나 최신인지 (lastLogTerm 우선, 같으면 lastLogIndex). */
