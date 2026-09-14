@@ -1,0 +1,56 @@
+
+participantgroup Node A (Client/Follower)
+participant "Node A:\nBatch Job Executor" as A_Job
+participant "Node A:\nLock Client" as A_Client
+participant "Node A (Follower):\nRaft Consensus Engine" as A_Engine
+participant "Node A (Follower):\nLock FSM" as A_FSM
+end
+
+participantgroup Node B (Leader)
+participant "Node B (Leader):\nRaft Consensus Engine" as B_Engine
+participant "Node B (Leader):\nLock FSM" as B_FSM
+end
+
+participantgroup Node C (Follower)
+participant "Node C (Follower):\nRaft Consensus Engine" as C_Engine
+participant "Node C (Follower):\nLock FSM" as C_FSM
+end
+
+
+A_Job->A_Client: acquireLock(lockKey, leaseTTL)
+activate A_Client
+
+A_Client->B_Engine: TCP RPC: RequestLockAcquire(nodeId="NodeA", lockKey, leaseTTL)
+activate B_Engine
+
+B_Engine->B_FSM: checkAvailability(lockKey)
+activate B_FSM
+B_FSM-->B_Engine: AVAILABLE
+deactivate B_FSM
+
+par Raft Replication: Leader to Follower A
+    B_Engine->A_Engine: TCP RPC: AppendEntries(Term, Entries=[LOCK_ACQUIRE], CommitIndex)
+    activate A_Engine
+    A_Engine-->B_Engine: AppendEntriesResponse(Success=true)
+    deactivate A_Engine
+else Raft Replication: Leader to Follower C
+    B_Engine->C_Engine: TCP RPC: AppendEntries(Term, Entries=[LOCK_ACQUIRE], CommitIndex)
+    activate C_Engine
+    C_Engine-->B_Engine: AppendEntriesResponse(Success=true)
+    deactivate C_Engine
+end
+
+note over B_Engine: Quorum(??? 2/3) ?? ?? -> commitIndex ??
+
+B_Engine->B_FSM: apply(LockAcquireCommand)
+activate B_FSM
+B_FSM->B_FSM: put(lockKey, \n{owner: "NodeA",\n expireAt: now+TTL,\n fenceToken: T1})
+B_FSM-->B_Engine: Applied(fenceToken=T1)
+deactivate B_FSM
+
+B_Engine-->A_Client: TCP RPC Response: LockGranted(fenceToken=T1, leaseDuration)
+deactivate B_Engine
+
+A_Client-->A_Job: LockAcquired(fenceToken=T1)
+deactivate A_Client
+

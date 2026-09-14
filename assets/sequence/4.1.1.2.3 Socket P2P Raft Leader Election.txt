@@ -1,0 +1,38 @@
+title Socket P2P Raft Leader Election
+
+participant "Node 1\n(Follower -> Candidate -> Leader)" as N1
+participant "Node 2\n(Follower)" as N2
+participant "Node 3\n(Follower)" as N3
+participant "Local WAL" as WAL
+
+// 1. Election Timeout & Candidate Transition
+N1->N1: Election Timeout Occurred
+N1->N1: Convert to Candidate, Increment Term to 1
+N1->WAL: Persist currentTerm=1, votedFor=Node1
+
+// 2. RequestVote Broadcast
+N1->N2: RequestVote(term=1, candidateId=Node1, lastLogIndex=0, lastLogTerm=0)
+N1->N3: RequestVote(term=1, candidateId=Node1, lastLogIndex=0, lastLogTerm=0)
+
+// 3. Vote Validation & Response
+N2->N2: Validate Candidate Term & Log
+N2->WAL: Persist currentTerm=1, votedFor=Node1
+N2-->N1: RequestVoteResponse(term=1, voteGranted=true)
+
+N3->N3: Validate Candidate Term & Log
+N3->WAL: Persist currentTerm=1, votedFor=Node1
+N3-->N1: RequestVoteResponse(term=1, voteGranted=true)
+
+// 4. Quorum Reached & Leader Transition
+N1->N1: Votes Counted = 3/3 (Quorum >= 2 Satisfied)
+N1->N1: Convert to Leader (Term 1)
+
+// 5. Periodic Heartbeat Loop
+loop Periodic Heartbeat Interval (500ms)
+    N1->N2: AppendEntries(term=1, leaderId=Node1, entries=[], commitIndex=0)
+    N1->N3: AppendEntries(term=1, leaderId=Node1, entries=[], commitIndex=0)
+    N2-->N1: AppendEntriesResponse(term=1, success=true)
+    N3-->N1: AppendEntriesResponse(term=1, success=true)
+    N2->N2: Reset Election Timer
+    N3->N3: Reset Election Timer
+end

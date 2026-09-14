@@ -1,0 +1,58 @@
+participant "Primary Worker (Node #1)" as W1
+
+participantgroup RDBMS Meta Store
+database "BATCH_EXECUTION_JOURNAL" as DB
+database "Re-assignment Queue" as Q
+end
+
+participant "New Leader Node\n(Recovery Scanner)" as L
+participant "Failover Worker (Node #2)" as W2
+
+activate L
+activate W1
+activate W2
+group 1. Normal Execution & Step Checkpoint
+W1->DB: 1. Independent Tx: Write Checkpoint (status='STARTED')
+activate DB
+
+DB-->W1: Tx Committed
+deactivate DB
+W1->DB: 2. Independent Tx: Update Checkpoint (status='RUNNING', lease_time)
+activate DB
+DB-->W1: Tx Committed
+deactivate DB
+end
+
+group 2. Node Crash Event
+deactivate W1
+space 
+destroy W1
+note over W1, DB: ? Node #1 Crashed (Process Killed / Network Down)\nOrphan Task left in status='RUNNING' (Lease Expired)
+end
+
+group 3. Leader Failover & Orphan Task Recovery
+note over L: Leader Election Triggered -> New Leader Elected
+L->DB: 3. Recovery Scan: SELECT * FROM BATCH_EXECUTION_JOURNAL\nWHERE status='RUNNING' AND lease_updated_at < NOW() - Lease_Timeout
+activate DB
+DB-->L: Return Orphan Task Record
+deactivate DB
+L->Q: 4. Re-assign Orphan Task (Push to Queue)
+activate Q
+Q-->L: Enqueued
+deactivate Q
+end
+
+group 4. Dynamic Replay & Idempotent Recovery
+W2->Q: 5. Dequeue Replay Task
+activate Q
+Q-->W2: Return Task Data
+deactivate Q
+note over W2: 6. Validate Idempotency Guard\n(Execution ID duplicate check)
+W2->W2: Execute Task (At-Least-Once Dynamic Replay)
+activate W2
+W2->DB: 7. Independent Tx: Update Checkpoint (status='COMPLETED')
+activate DB
+DB-->W2: Tx Committed
+deactivate DB
+deactivate W2
+end

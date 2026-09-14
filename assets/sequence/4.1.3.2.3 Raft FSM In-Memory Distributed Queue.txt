@@ -1,0 +1,96 @@
+title Raft FSM ?? In-Memory ?? ? (Distributed Queue)
+
+participantgroup #f7f7f7 **Leader Node**
+participant "DAG Workflow\n(Producer)" as DAG
+participant "In-Memory Queue\n(Leader Heap)" as QUEUE #lightblue
+participant "Leader Raft Engine\n(Leader FSM)" as FSM
+database "Leader WAL\n(Local Disk)" as WAL #lightblue
+participant "Socket Dispatcher\n(Leader Server)" as DISP
+participant "Write-Behind Sync\n(Leader Thread)" as SYNC
+database "Shared Meta RDBMS\n(External DB)" as DB #lightblue
+end
+
+participantgroup #f7f7f7 **Worker Node**
+participant "Follower Raft Engine\n(Worker Node)" as FOLL
+database "Follower WAL\n(Local Disk)" as FWAL #lightblue
+participant "Queue Client\n(Worker Node 2)" as CLIENT
+participant "Batch Launcher\n(Worker Node 2)" as LAUNCH
+end
+
+==Phase 1. ?? ?? ?? ? ?? ?? (In-Process Push & Raft Commit)==
+
+DAG->QUEUE:In-Process Push(Job-101)
+activate QUEUE
+QUEUE->FSM:?? ??? ?? (State: READY)
+activate FSM
+FSM->WAL:[C2] Sync WAL Append\n(?? ?? ??)
+FSM->FOLL:[C3] AppendEntries RPC
+activate FOLL
+FOLL->FWAL:[C4] Local WAL Append (??? ??)
+FOLL-->FSM:AppendEntriesResponse (Success)
+deactivate FOLL
+note over FSM:???(Quorum 2/3) ?? ?? ? Commit
+FSM-->QUEUE:?? ?? ?? (?? ??)
+deactivate FSM
+deactivate QUEUE
+
+==Phase 2. ?? ?? ?? ? ?? (Work Pull & Point-to-Point Execution)==
+
+CLIENT->DISP:[C5] Pull(DequeueRequest) [Direct TCP Socket]
+activate CLIENT
+activate DISP
+DISP->QUEUE:??? ??\n(poll / 1:1 ??? ??)
+activate QUEUE
+QUEUE-->DISP:?? ?? ?? (Job-101)
+deactivate QUEUE
+DISP->FSM:?? ?? ?? (State: PROCESSING)
+activate FSM
+FSM->WAL:?? ?? ??\n(PROCESSING)
+FSM->FOLL:[C3] AppendEntries RPC (PROCESSING)
+activate FOLL
+FOLL->FWAL:[C4] Local WAL Append
+FOLL-->FSM:AppendEntriesResponse (Success)
+deactivate FOLL
+deactivate FSM
+DISP-->CLIENT:[C5] DequeueResponse(Job-101)
+deactivate DISP
+CLIENT->LAUNCH:Task ?? (Tasklet/Chunk ??)
+activate LAUNCH
+note over LAUNCH:?? ???? ?? ??
+LAUNCH-->CLIENT:?? ?? ??
+deactivate LAUNCH
+deactivate CLIENT
+
+==Phase 3. ?? ?? ? ?? ?? (Work Complete Ack)==
+
+CLIENT->DISP:[C5] Ack(Job-101, COMPLETED)
+activate CLIENT
+activate DISP
+DISP->QUEUE:??? ?? ?? ??
+DISP->FSM:?? ?? ?? (State: COMPLETED)
+activate FSM
+FSM->WAL:?? ?? ?? (COMPLETED)
+FSM->FOLL:[C3] AppendEntries RPC (COMPLETED)
+activate FOLL
+FOLL->FWAL:[C4] Local WAL Append
+FOLL-->FSM:AppendEntriesResponse (Success)
+deactivate FOLL
+note over FSM:??? ?? ?? ? ?? ??
+FSM->SYNC:?? ?? ?? ??
+deactivate FSM
+DISP-->CLIENT:Ack ?? ??
+deactivate DISP
+deactivate CLIENT
+
+==Phase 4. ????? DB ??? (Write-Behind Async Flush)==
+
+alt DB ?? ?? ?
+SYNC->DB:[C6] INSERT BATCH_JOB_HISTORY\n(??? ?? Flush)
+activate DB
+DB-->SYNC:?? ??
+deactivate DB
+else DB ?? ?? ? [NR-09, QAS-09 ??]
+SYNC->DB:?? ?? ?? ??
+note over DISP,SYNC:DB ?? ?? ??? ??? ??·??? ??? ?? ??\n(?? WAL? ?? ?? ??)
+note over WAL,SYNC:DB ?? ?? ? Local WAL Reconciliation Read ???? ?? ?? ?? ???
+end

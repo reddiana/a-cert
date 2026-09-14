@@ -1,0 +1,45 @@
+
+participant "Node 1\n(Term 1 Leader -> Follower)" as N1
+participant "Node 2\n(Follower -> Term 2 Leader)" as N2
+participant "Node 3\n(Follower)" as N3
+participant "Local WAL" as WAL
+database "Shared RDBMS" as DB
+
+// 1. Network Partition
+note over N1, N3: [Network Partition Occurred]\nPartition A: {Node 1 (Isolated 1/3)}\nPartition B: {Node 2, Node 3 (Quorum 2/3)}
+
+N1-[#red]xN2: AppendEntries(term=1, leaderId=Node1) (Blocked)
+N1-[#red]xN3: AppendEntries(term=1, leaderId=Node1) (Blocked)
+
+// 2. Majority Partition Re-election
+note over N2, N3: Partition B: Election Timeout on Node 2
+N2->N2: Convert to Candidate, Increment Term to 2
+N2->WAL: Persist currentTerm=2, votedFor=Node2
+
+N2->N3: RequestVote(term=2, candidateId=Node2, lastLogIndex=0, lastLogTerm=0)
+N3->N3: Check term 2 > term 1
+N3->WAL: Persist currentTerm=2, votedFor=Node2
+N3-->N2: RequestVoteResponse(term=2, voteGranted=true)
+
+N2->N2: Quorum Achieved (2/3 Votes)\nConvert to Leader (Term 2)
+
+// 3. Minority Rejection & Majority Commit
+note over N1: Client requests to Node 1 \nfail to reach Quorum (1/3)\n-> Commits Blocked \n(No Split-Brain)
+
+N2->N3: AppendEntries(term=2, leaderId=Node2, entries=[Job_101])
+N3->WAL: Append Log Entry (Job_101)
+N3-->N2: AppendEntriesResponse(term=2, success=true)
+N2->WAL: Commit Entry (Job_101)
+N2->DB: Async Write-Behind Sync
+
+// 4. Partition Recovery & Step Down
+note over N1, N3: [Network Partition Healed] Partition A & B Reconnected
+
+N2->N1: AppendEntries(term=2, leaderId=Node2, entries=[], commitIndex=1)
+N1->N1: Detect Higher Term (Local term=1 < Received term=2)
+N1->WAL: Update currentTerm=2, Step Down to Follower
+N1->N1: Sync Replicated Logs from Node 2
+N1-->N2: AppendEntriesResponse(term=2, success=true)
+N1->N1: Reset Election Timer
+
+note over N1, N3: Cluster Re-converged under Node 2 (Leader, Term 2)

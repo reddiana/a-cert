@@ -1,0 +1,39 @@
+
+participantgroup Node A (Client/Follower)
+participant "Node A (Follower):\nRaft Consensus Engine" as A_Engine
+participant "Node A (Follower):\nLock FSM" as A_FSM
+end
+
+participantgroup Node B (Leader)
+participant "Node B (Leader):\nRaft Consensus Engine" as B_Engine
+participant "Node B (Leader):\nLock FSM" as B_FSM
+end
+
+participantgroup Node C (Follower)
+participant "Node C (Follower):\nRaft Consensus Engine" as C_Engine
+participant "Node C (Follower):\nLock FSM" as C_FSM
+end
+
+activate B_Engine
+par Heartbeat/Commit Sync to Follower A
+    B_Engine->A_Engine: TCP RPC: AppendEntries(Heartbeat, CommitIndex)
+    activate A_Engine
+    A_Engine->A_FSM: applyCommitted(CommitIndex)
+    activate A_FSM
+    A_FSM->A_FSM: put(lockKey, \n{owner: "NodeA",\n expireAt: now+TTL,\n fenceToken: T1})
+    A_FSM-->A_Engine: Applied
+    deactivate A_FSM
+    A_Engine-->B_Engine: AppendEntriesResponse(Success=true)
+    deactivate A_Engine
+else Heartbeat/Commit Sync to Follower C
+    B_Engine->C_Engine: TCP RPC: AppendEntries(Heartbeat, CommitIndex)
+    activate C_Engine
+    C_Engine->C_FSM: applyCommitted(CommitIndex)
+    activate C_FSM
+    C_FSM->C_FSM: put(lockKey,\n{owner: "NodeA",\n expireAt: now+TTL,\n fenceToken: T1})
+    C_FSM-->C_Engine: Applied
+    deactivate C_FSM
+    C_Engine-->B_Engine: AppendEntriesResponse(Success=true)
+    deactivate C_Engine
+end
+

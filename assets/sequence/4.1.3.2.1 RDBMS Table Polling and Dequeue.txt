@@ -1,0 +1,45 @@
+participant "DAG Workflow\n(Producer)" as Producer
+participant "DB Table:\nBATCH_JOB_QUEUE" as DB
+participant "Batch Launcher #1\n(Active / Polling)" as Worker1
+participant "Batch Launcher #2\n(Active / Polling)" as Worker2
+participant "Batch Launcher #3\n(Active / Polling)" as Worker3
+
+note over Producer, DB: [1. INSERT (Push Task)]
+Producer->DB: INSERT INTO BATCH_JOB_QUEUE\n(status='READY', payload=...)
+activate DB
+DB-->Producer: SUCCESS
+deactivate DB
+
+note over Worker1, DB: [2. SELECT ... FOR UPDATE SKIP LOCKED]
+Worker1->DB: START TRANSACTION;\nSELECT ... WHERE status='READY'\nLIMIT 1 FOR UPDATE SKIP LOCKED;
+activate Worker1
+activate DB
+DB-->Worker1: [Row #1] ?? ? ??? ?(X-Lock) ??
+deactivate DB
+
+deactivate Worker1
+note over Worker2, DB: [3. Skip Locked Rows & Lock Next Row]
+Worker2->DB: START TRANSACTION;\nSELECT ... WHERE status='READY'\nLIMIT 1 FOR UPDATE SKIP LOCKED;
+activate Worker2
+activate DB
+note over DB: Row #1? ??????\n??? ?? ??(SKIP) ? Row #2 ??
+DB-->Worker2: [Row #2] ?? ? ??? ?(X-Lock) ??
+deactivate DB
+
+deactivate Worker2
+note over Worker3, DB: [4. UPDATE status='RUNNING' (Dequeue)]
+Worker3->DB: START TRANSACTION;\nSELECT ... WHERE status='READY'\nLIMIT 1 FOR UPDATE SKIP LOCKED;
+activate Worker3
+activate DB
+note over DB: Row #1, Row #2 ??(SKIP) ?\nRow #3 ??
+DB-->Worker3: [Row #3] ?? ? ??? ?(X-Lock) ??
+deactivate DB
+
+note over Worker3, DB: ??? ?? ? ???? ??
+Worker3->DB: UPDATE SET status='RUNNING',\nreserved_at=NOW() WHERE job_id=3;
+activate DB
+DB-->Worker3: OK
+deactivate DB
+Worker3->DB: COMMIT;
+deactivate Worker3
+note over Worker3: Row #3? ?? ? ??\n(status? RUNNING??? ? ?? ?? ??)

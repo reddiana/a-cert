@@ -1,0 +1,54 @@
+participantgroup Node 1 (Crashed)
+participant "Primary Worker Node:\nBatch Step Runner" as P_BSR
+end
+
+participantgroup Node 2 (Leader)
+participant "New Leader Node:\nAutomatic Recovery Scanner" as L_ARS
+participant "New Leader Node:\nRaft Consensus Engine" as L_RCE
+participant "New Leader Node:\nLocal WAL & FSM" as L_FSM
+participant "New Leader Node:\nWrite-Behind Engine" as L_WBE
+end
+
+participantgroup Node 3 (Worker)
+participant "Failover Worker Node:\nBatch Launcher" as W_BL
+participant "Failover Worker Node:\nDynamic Replay Engine" as W_DRE
+participant "Meta RDBMS:\nBATCH_EXECUTION_JOURNAL" as DB_BEJ
+end
+
+note over P_BSR: 0. Step Checkpoint (RUNNING) ?? ?\nWorker Node 1 ???? ??? ?? (Crash)
+
+== 1. ?? ??? ?? ? ??? ? ?? ?? ==
+
+L_ARS->L_FSM: 1. scanOrphanTasks()\n[??='RUNNING' ? ????(Lease) ?? ??? ??]
+L_FSM-->L_ARS: 1.1 return orphanTaskList [Task_101]
+
+L_ARS->L_RCE: 2. requestReassign(Task_101)\n[?? ???? DD-03 ??? ?? ?? ??]
+
+L_RCE->L_FSM: 3. appendLogAndApply(ENQUEUE_REASSIGN, Task_101)\n[Raft Quorum ?? ? In-Memory ? ???? Re-enqueue ? WAL fsync]
+L_FSM-->L_RCE: 3.1 applySuccess(reassigned=true)
+
+== 2. ??? ?? ? ??? ??? ?? ==
+
+W_BL->L_RCE: 4. requestTaskDequeue(nodeId="Node3")\n[?? ?? ??? ?? ? ?? ??]
+
+L_RCE->L_FSM: 5. dequeueTask()\n[??? ????? Task_101 ?? ? ??? RUNNING?? ??]
+L_FSM-->L_RCE: 5.1 return Task_101
+
+L_RCE-->W_BL: 6. dispatchTask(Task_101, executionToken="T2")
+
+W_BL->W_DRE: 7. executeTask(Task_101, executionToken="T2")
+
+W_DRE->W_DRE: 8. idempotencyGuardCheck(Task_101, token="T2")\n[?? ??? ??? ?? ?? ?? ??]
+
+W_DRE->W_DRE: 9. replayTaskExecution(Task_101)\n[At-Least-Once ?? ??? ??]
+
+== 3. ?? ?? ?? ?? ? RDBMS Write-Behind ??? ?? ==
+
+W_DRE->L_RCE: 10. reportTaskStatus(Task_101, status="COMPLETED")\n[??? ?? ??? ??]
+
+L_RCE->L_FSM: 11. appendLogAndApply(ACK_COMPLETE, Task_101)\n[Raft Log ?? ? FSM ? ?? ?? ??, ?? WAL fsync]
+L_FSM-->L_RCE: 11.1 ackSuccess
+
+L_FSM->L_WBE: 12. enqueueJournalRecord(Task_101, status="COMPLETED")\n[RDBMS ??? ??? ?? ?? ??? ??]
+
+L_WBE->DB_BEJ: 13. asyncUpdateJournalStatus(task_id=101, status="COMPLETED")\n[?? RDBMS ?? ??? ?? UPDATE (??? ??)]
