@@ -24,8 +24,8 @@ note over FSM1: node-3 추적 작업 → Scenario 2 고립 작업 판정 적용\
 note over N1,N2: Node 3 부재 중에도 index 202..230 정상 커밋
 K8s->N3: Pod 재생성 (동일 식별자 batch-scheduler-2)
 K8s->PVC: 기존 PVC 재마운트 (/var/data/batch/wal)
-N3->PVC: 최신 Snapshot 로드 (lastIncludedIndex=150)
-N3->PVC: WAL segment Replay (151..200), HardState 복원
+N3->PVC: HardState 복원 (currentTerm, votedFor, commitIndex)
+N3->PVC: raft.log Replay (1..200, CRC 검증)
 N3->N3: FSM 복원, role = FOLLOWER\nReadiness = false (따라잡기 전)
 
 N1->N3: AppendEntries(term=1, prevLogIndex=200, prevLogTerm=1,\nentries=[201..230], leaderCommit=230)
@@ -36,12 +36,8 @@ else WAL 꼬리 불일치 또는 유실
 N3-->N1: AppendResponse(success=false, conflictIndex=191)
 N1->N3: AppendEntries(prevLogIndex=190, entries=[191..230])
 N3-->N1: AppendResponse(success=true, matchIndex=230)
-else nextIndex가 리더 압축 하한 이전
-N1->N3: InstallSnapshot(lastIncludedIndex=220, lastIncludedTerm=1, data)
-N3-->N1: SnapshotResponse(success=true)
-N1->N3: AppendEntries(prevLogIndex=220, entries=[221..230])
-N3-->N1: AppendResponse(success=true, matchIndex=230)
 end
+note over N1,N3: 로그 압축 미구현으로 리더가 전체 로그를 보유하므로 AppendEntries만으로 따라잡음\n(InstallSnapshot은 압축 구현 후 적용, RISK-01)
 N3->N3: applyUpTo(230)
 N1->N1: matchIndex[node-3] ≥ commitIndex → 따라잡기 완료
 par Parallel Replication

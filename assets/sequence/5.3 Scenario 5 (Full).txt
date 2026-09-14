@@ -8,15 +8,15 @@ participant "Node 2\nScheduler Core / BatchLauncher" as C2
 note over N1,N3: T0: 네트워크 분할 — Partition A {Node 1} / Partition B {Node 2, Node 3}\n(분할 직전 commitIndex = 400)
 
 note over C1,N1: 1. 소수파: 커밋 불가 → 인출·디스패치 불가
-C1->N1: queue.poll() → QUEUE_DEQUEUE
+C1->N1: queue.pollLease() → QUEUE_DEQUEUE
 N1->N1: append(index=401, term=1) + fsync
 N1-xN2: AppendEntries(term=1, prevLogIndex=400, entries=[401])
 N1-xN3: AppendEntries(term=1, prevLogIndex=400, entries=[401])
 note over N1: 과반수 ACK 없음 → 미커밋 → FSM 미적용\n(작업이 인출되지 않음)
 N1-->C1: ClientResponse(TIMEOUT) [2,000ms]
 note over N1: T0+≤2s: Check-Quorum\nElection Timeout 동안 과반수 응답 없음 → FOLLOWER 강등
-C1->N1: lock 조회 / poll() 재시도
-N1-->C1: NOT_LEADER(leaderHint=unknown)\n(ReadIndex 불가 → 조회·쓰기 모두 거부)
+C1->N1: pollLease() 재시도
+N1-->C1: NOT_LEADER(leaderHint=unknown)\n(커밋 불가 → 락 획득·인출 명령 거부)
 note over C1: exec-301 lease 갱신 불가\n→ 다수파 리더가 Scenario 2 절차로 판정
 
 note over N2,N3: 2. 다수파: 신규 리더 선출 및 정상 쓰기

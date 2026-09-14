@@ -15,7 +15,7 @@ note over N1: fenceToken 발급 → 로컬 FSM으로 선행 작업 완료 판정
 N1->F: QUEUE_ENQUEUE(Job_101), LOCK_RELEASE 복제·커밋
 
 note over N1,L2: 2. 분산 큐 인출 (팔로워 노드 요청은 리더로 전달)
-L2->N1: poll() → QUEUE_DEQUEUE
+L2->N1: pollLease() → QUEUE_DEQUEUE
 N1->F: 복제·커밋 (동시 요청은 Group Commit)
 N1-->L2: Job_101, leaseToken (QAS-02)
 
@@ -31,5 +31,5 @@ N1->F: 복제·커밋
 N1->N1: 후행 DAG 판정 (1단계 반복)
 
 note over N1,DB: 5. Write-Behind 비동기 반영 (리더 전용)
-N1->DB: 커밋 구간 일괄 INSERT + 체크포인트 갱신 (log_index 멱등)
+N1->DB: 커밋 구간 DELETE 후 INSERT + 체크포인트 갱신 (log_index 구간 멱등)
 DB-->N1: COMMIT OK

@@ -14,10 +14,10 @@ note over N1,N2: T0+≤3s: 멤버십 자가 치유 완료 (QAS-04)\nnode-3 추�
 
 note over N3,K8s: 2. Pod 재기동 및 WAL 복원
 K8s->N3: 동일 식별자 Pod 재생성 + 기존 PVC 재마운트
-N3->N3: Snapshot 로드 + WAL Replay → FSM 복원\nReadiness = false
+N3->N3: HardState 복원 + WAL(raft.log) Replay → FSM 복원\nReadiness = false
 
 note over N1,N3: 3. 로그 따라잡기 및 재합류
-N1->N3: AppendEntries (누락 구간, 필요 시 InstallSnapshot)
+N1->N3: AppendEntries (누락 구간)
 N3-->N1: AppendResponse(matchIndex = commitIndex)
 N1->N2: MEMBER_STATUS(node-3=ALIVE) 복제·커밋
 N1->N3: MEMBER_STATUS(node-3=ALIVE) 복제·커밋

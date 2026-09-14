@@ -1,0 +1,21 @@
+flowchart LR
+    Operator["배치 운영자 (EE-01)"]
+    Linked["사내 연계 시스템 (EE-05)"]
+    subgraph Cluster["BatchService 클러스터"]
+        Scheduler["BatchService Scheduler"]
+    end
+    DB[("배치 메타 DB (EE-04)")]
+    K8s["Kubernetes API Server<br>(EE-02)"]
+    VM["VM 호스트 Shell / SSH<br>(EE-03)"]
+
+    Operator -- "배치 작업 제어 및 모니터링<br>(Web/CLI, INF-01)" --> Scheduler
+    Linked -- "배치 등록·즉시 실행 연계<br>(REST API, INF-01)" --> Scheduler
+    Scheduler -- "실행 이력 / 저널 동기화<br>(JDBC, INF-04)" --> DB
+    Scheduler -- "Pod 생성 및 실행 제어<br>(REST/HTTPS, INF-02)" --> K8s
+    Scheduler -- "원격 프로세스 실행 및 제어<br>(SSH/Agent, INF-03)" --> VM
+
+    classDef ext fill:#eceff1,stroke:#546e7a,stroke-width:2px;
+    classDef sys fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    class Operator,Linked,DB,K8s,VM ext;
+    class Scheduler sys;
+    style Cluster fill:#f8f8f8,stroke:#333333,stroke-dasharray: 5 5

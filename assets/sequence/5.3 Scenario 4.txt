@@ -27,4 +27,4 @@ end
 WB->N1: SYNC_CHECKPOINT 제안
 N1->Peers: 복제·커밋 → 전 노드 압축 하한 동기화
 note over WB: 미동기화 0건 → 상태 = NORMAL
-note over WB,DB: 동기화 중 리더 교체 시 신규 리더가 DB 체크포인트부터 재개\n(겹치는 구간은 UNIQUE log_index로 중복 제거)
+note over WB,DB: 동기화 중 리더 교체 시 신규 리더가 DB 체크포인트부터 재개\n(겹치는 구간은 log_index 구간 DELETE 후 INSERT로 중복 제거)

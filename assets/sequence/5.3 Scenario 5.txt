@@ -8,11 +8,11 @@ participant "Node 2\nScheduler / BatchLauncher" as C2
 note over N1,N3: T0: 네트워크 분할 — Partition A {Node 1} / Partition B {Node 2, Node 3}
 
 note over C1,N1: 1. 소수파: 커밋 불가
-C1->N1: poll() → QUEUE_DEQUEUE
+C1->N1: pollLease() → QUEUE_DEQUEUE
 N1-xN2: AppendEntries (전달 불가)
 note over N1: 과반수 응답 없음 → 미커밋 → 작업 미인출
 N1-->C1: TIMEOUT
-note over N1: Check-Quorum → FOLLOWER 강등\n이후 조회·쓰기 거부 (NOT_LEADER)
+note over N1: Check-Quorum → FOLLOWER 강등\n이후 쓰기 요청 거부 (NOT_LEADER)
 
 note over N2,N3: 2. 다수파: 신규 리더 선출 및 정상 쓰기
 N2->N3: PreVote → RequestVote
@@ -27,4 +27,4 @@ note over N1,N3: T1: 네트워크 복구 및 재수렴
 N2->N1: AppendEntries(term=2)
 N1->N1: 상위 term 수용, 미커밋 엔트리 절단 후 리더 로그로 대체
 N1-->N2: AppendResponse(success=true)
-note over N1,N3: 활성 리더 1개 유지 (QAS-03), 3노드 로그·FSM 일치
+note over N1,N3: 쓰기 가능 리더 1개 유지 (QAS-03), 3노드 로그·FSM 일치

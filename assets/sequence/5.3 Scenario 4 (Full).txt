@@ -9,7 +9,7 @@ participant "Node 2 (교체 리더)\nWriteBehindSynchronizer" as WB2
 
 note over DB: batch_sync_checkpoint.last_log_index = 300
 note over DB: T0: Meta RDBMS 장애 (네트워크 단절 / 인스턴스 다운)
-WB->DB: BEGIN; INSERT entries[301..320] ...
+WB->DB: BEGIN; DELETE·INSERT entries[301..320] ...
 DB-xWB: SQLException (Connection Timeout)
 WB->WB: ROLLBACK, 상태 = DB_DOWN\n재시도 backoff 1s→2s→4s→8s→10s(상한)
 WB->WAL1: compactionFloor 고정 = 300 (미반영 구간 WAL 보존)
@@ -38,13 +38,13 @@ DB-->WB: 300 (메모리가 아닌 DB 체크포인트 기준)
 loop 500건 단위 순차 Replay (log_index 오름차순, 301..800)
 WB->WAL1: readCommitted(fromIndex, toIndex)
 WAL1-->WB: entries[fromIndex..toIndex]
-WB->DB: BEGIN\nINSERT INTO batch_journal_log ... (중복 log_index 무시)\nUPDATE batch_sync_checkpoint SET last_log_index = toIndex\nCOMMIT
+WB->DB: BEGIN\nDELETE FROM batch_journal_log WHERE log_index BETWEEN fromIndex AND toIndex\nINSERT INTO batch_journal_log ...\nUPDATE batch_sync_checkpoint SET last_log_index = toIndex\nCOMMIT
 DB-->WB: COMMIT OK
 WB->WAL1: setCompactionFloor(toIndex)
 end
 WB->WAL1: readCommitted(801, 820)
 WAL1-->WB: entries[801..820]
-WB->DB: BEGIN; INSERT ...; UPDATE checkpoint = 820; COMMIT
+WB->DB: BEGIN; DELETE·INSERT 801..820; UPDATE checkpoint = 820; COMMIT
 DB-->WB: COMMIT OK
 WB->N1: propose(SYNC_CHECKPOINT lastDbSyncedIndex=820)
 N1->Peers: AppendEntries(SYNC_CHECKPOINT) → 전 노드 압축 하한선 동기화
@@ -55,6 +55,6 @@ note over WB: Follower 강등 즉시 Synchronizer 중단
 note over WB2: 신규 리더 승격 시 Synchronizer 활성화
 WB2->DB: SELECT last_log_index FROM batch_sync_checkpoint
 DB-->WB2: 마지막으로 커밋된 체크포인트 (예: 800)
-WB2->DB: BEGIN; INSERT 801..820 (중복 log_index 무시); UPDATE checkpoint = 820; COMMIT
-note over WB2,DB: 구 리더의 미완료 트랜잭션과 구간이 겹쳐도\nUNIQUE(log_index)로 중복 반영 방지
+WB2->DB: BEGIN; DELETE·INSERT 801..820; UPDATE checkpoint = 820; COMMIT
+note over WB2,DB: 구 리더의 미완료 트랜잭션과 구간이 겹쳐도\n구간 DELETE 후 INSERT와 체크포인트 단조 증가 갱신으로 중복 반영 방지
 end
