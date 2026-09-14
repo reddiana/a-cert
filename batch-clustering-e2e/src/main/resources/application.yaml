@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: batch-cluster-testbed
+  datasource:
+    # 메타 DB 장애(TC-K8S-09) 시 커넥션 대기로 Write-Behind가 장시간 블로킹되지 않도록 짧은 타임아웃 적용
+    hikari:
+      connection-timeout: 2000
+      validation-timeout: 1000
+      maximum-pool-size: 4
+      initialization-fail-timeout: -1
+
+# 5.4.2 수요처 application.yaml 운영 권장값
+batch:
+  cluster:
+    cluster-id: batch-cluster
+    wal-fsync: true
+    sync:
+      initialize-schema: false   # meta-db 기동 시 5.4.2 DDL 사전 적용
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,raft   # DB Health는 readiness에 포함하지 않음 (5.3.2 Scenario 4)

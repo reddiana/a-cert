@@ -1,0 +1,69 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.sds.batchservice'
+version = '1.0.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    // K8s 통합 검증 드라이버: 배포된 클러스터를 외부에서 조작·계측 (7.1.6)
+    e2eTest
+}
+
+dependencies {
+    // 테스트용 수요처 애플리케이션 (Testbed): 엔진 Embedded Library + Web/Actuator/JDBC
+    implementation platform('org.springframework.boot:spring-boot-dependencies:3.2.4')
+    implementation 'com.sds.batchservice:batch-clustering-engine:1.0.0-SNAPSHOT'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    e2eTestImplementation platform('org.springframework.boot:spring-boot-dependencies:3.2.4')
+    e2eTestImplementation 'org.junit.jupiter:junit-jupiter'
+    e2eTestImplementation 'org.assertj:assertj-core'
+    e2eTestImplementation 'org.awaitility:awaitility:4.2.1'
+    e2eTestImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    e2eTestImplementation 'org.slf4j:slf4j-api'
+    e2eTestRuntimeOnly 'ch.qos.logback:logback-classic'
+    e2eTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    applicationName = 'batch-cluster-testbed'
+    mainClass = 'com.sds.batchservice.testbed.TestbedApplication'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    // Spring MVC @RequestParam 이름 해석 (Spring Boot Gradle 플러그인 미사용 시 명시 필요)
+    options.compilerArgs << '-parameters'
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'minikube에 배포된 batch-scheduler StatefulSet 대상 K8s 통합 검증'
+    group = 'verification'
+    testClassesDirs = sourceSets.e2eTest.output.classesDirs
+    classpath = sourceSets.e2eTest.runtimeClasspath
+    useJUnitPlatform()
+    outputs.upToDateWhen { false }
+    defaultCharacterEncoding = 'UTF-8'
+    systemProperty 'e2e.projectDir', projectDir.absolutePath
+    jvmArgs "-Dfile.encoding=UTF-8", "-Dsun.stdout.encoding=UTF-8", "-Dsun.stderr.encoding=UTF-8"
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = 'full'
+        showStandardStreams = true   // 장시간 실행되므로 계측 로그를 실시간 출력
+    }
+}

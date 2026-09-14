@@ -1,0 +1,4 @@
+rootProject.name = 'batch-clustering-e2e'
+
+// 엔진은 소스 그대로 Composite Build로 참조합니다 (별도 배포 없이 현재 코드 검증)
+includeBuild '../batch-clustering-engine'

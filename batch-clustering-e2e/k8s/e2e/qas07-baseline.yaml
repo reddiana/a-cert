@@ -1,0 +1,66 @@
+# TC-K8S-07 기준선: 동일 이미지·JVM 옵션·DataSource에서 엔진만 비활성화 (batch.cluster.enabled=false)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testbed-baseline
+  namespace: ns-batchservice
+  labels:
+    app: testbed-baseline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: testbed-baseline
+  template:
+    metadata:
+      labels:
+        app: testbed-baseline
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: testbed
+          image: batch-cluster-testbed:e2e
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BATCH_CLUSTER_ENABLED
+              value: "false"
+            # raft HealthIndicator가 없으므로 readiness 그룹에서 제외
+            - name: MANAGEMENT_ENDPOINT_HEALTH_GROUP_READINESS_INCLUDE
+              value: "readinessState"
+            - name: JAVA_OPTS
+              value: "-Xms256m -Xmx512m -XX:+UseG1GC -Dsun.net.inetaddr.ttl=5 -Dsun.net.inetaddr.negative.ttl=1"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://meta-db.ns-meta-db:5432/batchdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "batch"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "batch"
+          ports:
+            - containerPort: 8080
+              name: http-api
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "768Mi"
+            limits:
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: testbed-baseline-e2e
+  namespace: ns-batchservice
+spec:
+  type: NodePort
+  selector:
+    app: testbed-baseline
+  ports:
+    - name: http-api
+      port: 8080
+      targetPort: 8080
+      nodePort: 30089

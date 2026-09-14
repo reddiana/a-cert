@@ -1,0 +1,49 @@
+# 검증 드라이버(호스트)가 Pod별 Testbed API에 직접 접근하기 위한 NodePort
+# publishNotReadyAddresses: 네트워크 분할 등으로 Readiness가 false인 Pod의 상태도 관측해야 함
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-scheduler-0-e2e
+  namespace: ns-batchservice
+spec:
+  type: NodePort
+  publishNotReadyAddresses: true
+  selector:
+    statefulset.kubernetes.io/pod-name: batch-scheduler-0
+  ports:
+    - name: http-api
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-scheduler-1-e2e
+  namespace: ns-batchservice
+spec:
+  type: NodePort
+  publishNotReadyAddresses: true
+  selector:
+    statefulset.kubernetes.io/pod-name: batch-scheduler-1
+  ports:
+    - name: http-api
+      port: 8080
+      targetPort: 8080
+      nodePort: 30081
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-scheduler-2-e2e
+  namespace: ns-batchservice
+spec:
+  type: NodePort
+  publishNotReadyAddresses: true
+  selector:
+    statefulset.kubernetes.io/pod-name: batch-scheduler-2
+  ports:
+    - name: http-api
+      port: 8080
+      targetPort: 8080
+      nodePort: 30082

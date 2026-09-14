@@ -1,0 +1,11 @@
+# 5.4.2 Production Deployment Specification 매니페스트 (운영 기준 원본)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespaces.yaml
+  - rbac.yaml
+  - secret.yaml
+  - headless-service.yaml
+  - statefulset.yaml
+  - pdb.yaml
+  - networkpolicy.yaml

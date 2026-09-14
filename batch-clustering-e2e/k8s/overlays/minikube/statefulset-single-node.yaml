@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: batch-scheduler
+  namespace: ns-batchservice
+spec:
+  template:
+    spec:
+      containers:
+        - name: batch-scheduler
+          env:
+            # minikube 노드(4 vCPU / 6GiB)에 3개 Pod와 메타 DB·Chaos Mesh를 수용하기 위한 Heap 축소 (운영: 512m~1024m)
+            - name: JAVA_OPTS
+              value: "-Xms256m -Xmx512m -XX:+UseG1GC -Dsun.net.inetaddr.ttl=5 -Dsun.net.inetaddr.negative.ttl=1"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://meta-db.ns-meta-db:5432/batchdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "batch"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "batch"
+            # K8sJobExecutionStatusProvider 활성화 (ns-batch Job 상태 조회)
+            - name: TESTBED_EXECUTION_TARGET_NAMESPACE
+              value: "ns-batch"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "768Mi"
+            limits:
+              memory: "1Gi"
+          # 3개 JVM이 단일 노드에서 동시 기동하므로 기동 허용 시간 확대 (2s × 90 = 180s)
+          startupProbe:
+            failureThreshold: 90

@@ -1,0 +1,34 @@
+# minikube 싱글노드 통합 검증 overlay (7.1.6)
+# base(5.4.2 운영 매니페스트) 대비 변경점만 정의합니다.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - meta-db.yaml
+  - nodeport-services.yaml
+images:
+  - name: internal-registry.company.com/batch/batch-service
+    newName: batch-cluster-testbed
+    newTag: e2e
+secretGenerator:
+  - name: batch-scheduler-raft
+    namespace: ns-batchservice
+    behavior: replace
+    literals:
+      - auth-token=e2e-minikube-shared-token
+generatorOptions:
+  disableNameSuffixHash: true
+patches:
+  # 싱글노드: 전용 노드 풀·Taint가 없고, 필수 podAntiAffinity를 유지하면 Pod 2개가 Pending 상태로 남음
+  - target:
+      kind: StatefulSet
+      name: batch-scheduler
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/nodeSelector
+      - op: remove
+        path: /spec/template/spec/tolerations
+      - op: remove
+        path: /spec/template/spec/affinity
+  # 자원 축소, 테스트용 메타 DB·Execution Target 연결
+  - path: statefulset-single-node.yaml

@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: batch-scheduler
+  namespace: ns-batchservice
+  labels:
+    app: batch-scheduler
+spec:
+  serviceName: batch-service
+  replicas: 3
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: batch-scheduler
+  template:
+    metadata:
+      labels:
+        app: batch-scheduler
+    spec:
+      serviceAccountName: batch-scheduler
+      terminationGracePeriodSeconds: 30
+      # [물리적 VM 격리] 스케줄러 전용 노드 풀 지정
+      nodeSelector:
+        nodepool: batch-service
+      # [물리적 VM 격리] 전용 노드 Taint 허용
+      tolerations:
+        - key: "workload"
+          operator: "Equal"
+          value: "batch-service"
+          effect: "NoSchedule"
+      affinity:
+        # [고가용성 분산] 서로 다른 호스트 VM에 1개씩 강제 분산 (Quorum 보호)
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - batch-scheduler
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: batch-scheduler
+          image: internal-registry.company.com/batch/batch-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7800
+              name: raft-p2p
+              protocol: TCP
+            - containerPort: 8080
+              name: http-api
+              protocol: TCP
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: RAFT_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: RAFT_PEERS
+              value: "batch-scheduler-0.batch-service.ns-batchservice:7800,batch-scheduler-1.batch-service.ns-batchservice:7800,batch-scheduler-2.batch-service.ns-batchservice:7800"
+            - name: RAFT_PORT
+              value: "7800"
+            - name: RAFT_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: batch-scheduler-raft
+                  key: auth-token
+            - name: WAL_DATA_DIR
+              value: "/var/data/batch/wal"
+            # DNS 캐시 TTL 단축: Pod 재생성으로 바뀐 피어 IP를 재연결 시 반영 (JVM 기본 30초)
+            - name: JAVA_OPTS
+              value: "-Xms512m -Xmx1024m -XX:+UseG1GC -Dsun.net.inetaddr.ttl=5 -Dsun.net.inetaddr.negative.ttl=1"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://meta-db.company.com:5432/batchdb"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 2
+          volumeMounts:
+            - name: wal-storage
+              mountPath: /var/data/batch/wal
+  volumeClaimTemplates:
+    - metadata:
+        name: wal-storage
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi

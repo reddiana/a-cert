@@ -1,0 +1,113 @@
+# 테스트용 메타 RDBMS (운영에서는 사내 중앙 인프라 DB, 5.4.1)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-meta-db
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meta-db-init
+  namespace: ns-meta-db
+data:
+  # 5.4.2-5 3) DDL: PostgreSQL 기준
+  01-batch-sync-schema.sql: |
+    CREATE TABLE batch_journal_log (
+        log_index    BIGINT        NOT NULL PRIMARY KEY,
+        term         BIGINT        NOT NULL,
+        entry_type   VARCHAR(32)   NOT NULL,
+        request_id   VARCHAR(128),
+        proposed_at  BIGINT        NOT NULL,
+        payload      VARCHAR(4000),
+        synced_at    TIMESTAMP     NOT NULL
+    );
+
+    CREATE TABLE batch_sync_checkpoint (
+        cluster_id      VARCHAR(64)  NOT NULL PRIMARY KEY,
+        last_log_index  BIGINT       NOT NULL,
+        updated_at      TIMESTAMP    NOT NULL
+    );
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: meta-db-data
+  namespace: ns-meta-db
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meta-db
+  namespace: ns-meta-db
+  labels:
+    app: meta-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: meta-db
+  template:
+    metadata:
+      labels:
+        app: meta-db
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_DB
+              value: batchdb
+            - name: POSTGRES_USER
+              value: batch
+            - name: POSTGRES_PASSWORD
+              value: batch
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "batch", "-d", "batchdb"]
+            periodSeconds: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              memory: "256Mi"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: meta-db-data
+        - name: init
+          configMap:
+            name: meta-db-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meta-db
+  namespace: ns-meta-db
+spec:
+  selector:
+    app: meta-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

@@ -1,0 +1,33 @@
+# 5.4.2-5 2) Execution Target 상태 조회 권한
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: batch-scheduler
+  namespace: ns-batchservice
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: batch-execution-status-reader
+  namespace: ns-batch
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: batch-scheduler-execution-status-reader
+  namespace: ns-batch
+subjects:
+  - kind: ServiceAccount
+    name: batch-scheduler
+    namespace: ns-batchservice
+roleRef:
+  kind: Role
+  name: batch-execution-status-reader
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: batch-scheduler-raft
+  namespace: ns-batchservice
+spec:
+  podSelector:
+    matchLabels:
+      app: batch-scheduler
+  policyTypes:
+    - Ingress
+  ingress:
+    # Raft P2P: 동일 StatefulSet Pod 간에만 허용
+    - from:
+        - podSelector:
+            matchLabels:
+              app: batch-scheduler
+      ports:
+        - port: 7800
+          protocol: TCP
+    # HTTP API / Actuator
+    - ports:
+        - port: 8080
+          protocol: TCP
