@@ -21,8 +21,8 @@
 다음 파일들은 docx 전환용 중간 산출물이므로 모든 분석 및 편집 작업 대상에서 제외합니다:
   - ArchitectureSpecification-merged.md
   - ArchitectureSpecification-merged.docx
-  - template.docx
-  - 후처리.md
+  - tools/template.docx
+  - tools/Docx변환.md
 
 ## Meraid 스크립트 작성 시
 - ""로 내용을 반드시 감싸주세요.
